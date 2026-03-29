@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Directional</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+  <style>
+    :root {
+      --bg: #080d1c;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --border: #263054;
+      --accent: #4f9cff;
+      --city-a: #4cdf8a;
+      --city-b: #ff6b6b;
+      --text: #e2e8f8;
+      --text-dim: #6b7aa0;
+      --needle-n: #ff4444;
+      --needle-s: #3d4870;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* ── HEADER ──────────────────────────────────── */
+    header {
+      width: 100%;
+      max-width: 560px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-compass { font-size: 1.8rem; line-height: 1; }
+    .logo-text { display: flex; flex-direction: column; }
+    .logo-name {
+      font-size: 1.1rem; font-weight: 800;
+      letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .puzzle-num { font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.08em; }
+    .test-badge {
+      font-size: 0.6rem; color: #ff9944; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+
+    .header-btns { display: flex; gap: 8px; }
+    .icon-btn {
+      width: 36px; height: 36px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px; cursor: pointer;
+      font-size: 1rem; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s; text-decoration: none;
+    }
+    .icon-btn:hover { background: var(--border); }
+
+    /* ── MAIN ────────────────────────────────────── */
+    main {
+      width: 100%; max-width: 560px; flex: 1;
+      padding: 16px; display: flex; flex-direction: column;
+      align-items: center; gap: 14px;
+    }
+
+    /* ── STATE MACHINE ───────────────────────────── */
+    .panel { display: none; width: 100%; flex-direction: column; align-items: center; gap: 14px; }
+    body[data-state="intro"]   #panel-intro   { display: flex; }
+    body[data-state="idle"]    #panel-idle    { display: flex; }
+    body[data-state="playing"] #panel-playing { display: flex; }
+    body[data-state="result"]  #panel-result  { display: flex; }
+    body[data-state="done"]    #panel-done    { display: flex; }
+
+    /* ── INTRO PANEL ────────────────────────────── */
+    .intro-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px 22px; text-align: center; width: 100%;
+    }
+    .intro-logo { font-size: 3.5rem; margin-bottom: 8px; }
+    .intro-title {
+      font-size: 1.6rem; font-weight: 800;
+      letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 16px;
+    }
+    .intro-desc {
+      font-size: 0.92rem; color: var(--text-dim); line-height: 1.7; margin-bottom: 20px;
+    }
+    .intro-desc strong { color: var(--text); }
+    .intro-scoring {
+      display: flex; flex-direction: column; gap: 5px;
+      margin-bottom: 20px; text-align: left;
+    }
+    .intro-scoring .scoring-row { font-size: 0.82rem; }
+
+    /* ── IDLE PANEL ──────────────────────────────── */
+    .idle-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px 20px; text-align: center; width: 100%;
+    }
+    .idle-label {
+      font-size: 0.72rem; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 14px;
+    }
+    .city-pair {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .city-chip {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 14px; font-size: 1.1rem; font-weight: 700;
+    }
+    .city-chip.a { border-color: var(--city-a); color: var(--city-a); }
+    .city-chip.b { border-color: var(--city-b); color: var(--city-b); }
+    .city-arrow { font-size: 1.2rem; color: var(--text-dim); }
+    .idle-desc { font-size: 0.88rem; color: var(--text-dim); line-height: 1.6; }
+    .idle-desc strong { color: var(--text); }
+
+    /* ── BUTTONS ─────────────────────────────────── */
+    .btn {
+      border-radius: 10px; font-size: 0.92rem; font-weight: 600;
+      cursor: pointer; padding: 12px 20px; border: 1px solid transparent;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .btn:active:not(:disabled) { transform: translateY(0); }
+    .btn:disabled { opacity: 0.45; cursor: default; }
+    .btn-primary  { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border-color: var(--border); }
+    .btn-lg { padding: 14px 36px; font-size: 1rem; border-radius: 12px; }
+    .btn-row { display: flex; gap: 10px; width: 100%; max-width: 340px; }
+    .btn-row .btn { flex: 1; text-align: center; }
+
+    /* ── PLAYING PANEL ───────────────────────────── */
+    #target-display {
+      position: relative;
+      width: 320px; height: 320px;
+      display: flex; align-items: center; justify-content: center;
+      overflow: visible;
+    }
+
+    #target-label {
+      position: absolute;
+      pointer-events: none;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      z-index: 10;
+      transform: translate(-50%, -50%);
+    }
+    .target-dot {
+      width: 10px; height: 10px;
+      background: var(--city-b); border-radius: 50%;
+      border: 2px solid #fff; box-shadow: 0 0 8px var(--city-b);
+    }
+    .target-name {
+      background: var(--surface2); border: 1px solid var(--city-b);
+      color: var(--city-b); font-size: 0.68rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+      letter-spacing: 0.07em; text-transform: uppercase;
+    }
+
+    #compass-wrap { position: relative; width: 240px; height: 240px; }
+    #compass-svg {
+      width: 100%; height: 100%;
+      touch-action: none; cursor: grab;
+      user-select: none; -webkit-user-select: none;
+    }
+    #compass-svg:active { cursor: grabbing; }
+
+    .from-label { text-align: center; }
+    .from-tag {
+      font-size: 0.68rem; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 2px;
+    }
+    .from-name { font-size: 1.15rem; font-weight: 700; color: var(--city-a); }
+
+    .bearing-display { display: flex; align-items: baseline; gap: 6px; }
+    .bearing-deg {
+      font-size: 2rem; font-weight: 800;
+      letter-spacing: 0.04em; font-variant-numeric: tabular-nums;
+    }
+    .bearing-card { font-size: 1rem; color: var(--text-dim); font-weight: 500; }
+
+    #hint-reveal {
+      display: none; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 16px; font-size: 0.875rem;
+      color: var(--text-dim); text-align: center; width: 100%; max-width: 340px;
+    }
+    #hint-reveal.visible { display: block; }
+    #hint-reveal strong { color: var(--text); }
+
+    /* ── RESULT PANEL ────────────────────────────── */
+    .grade-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px; text-align: center; width: 100%;
+    }
+    .grade-emoji { font-size: 2.8rem; margin-bottom: 4px; }
+    .grade-name  { font-size: 1.7rem; font-weight: 800; }
+    .grade-feedback {
+      font-size: 0.9rem; color: var(--text-dim);
+      font-style: italic; margin-top: 6px; line-height: 1.5;
+    }
+
+    .stats-row { display: flex; gap: 10px; width: 100%; }
+    .stat {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 8px; text-align: center;
+    }
+    .stat-label {
+      font-size: 0.65rem; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 4px;
+    }
+    .stat-value { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    #result-map, #done-map {
+      width: 100%; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border); background: #060d1a; min-height: 180px;
+    }
+    #result-map svg, #done-map svg { display: block; width: 100%; height: auto; }
+
+    /* ── DONE PANEL ──────────────────────────────── */
+    .done-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px; text-align: center; width: 100%;
+    }
+    .done-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 6px; }
+    .done-sub   { font-size: 0.88rem; color: var(--text-dim); }
+
+    /* ── MODALS ──────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100; padding: 16px; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 22px; max-width: 420px; width: 100%;
+      max-height: 85vh; overflow-y: auto;
+    }
+    .modal-hdr {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 16px;
+    }
+    .modal-title { font-size: 1.15rem; font-weight: 700; }
+    .modal-close {
+      background: none; border: none; color: var(--text-dim);
+      font-size: 1.2rem; cursor: pointer; padding: 4px 8px;
+    }
+    .modal-section { margin-bottom: 18px; }
+    .modal-section h3 {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); margin-bottom: 10px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-section p { font-size: 0.875rem; color: var(--text-dim); line-height: 1.65; }
+    .modal-section p + p { margin-top: 8px; }
+    .modal-section strong { color: var(--text); }
+
+    .scoring-list { display: flex; flex-direction: column; gap: 6px; }
+    .scoring-row {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface2); border-radius: 8px;
+      padding: 8px 10px; font-size: 0.875rem;
+    }
+    //JF: Realigned emoji from center to right and extended the width from 20px to 40px
+    .s-emoji { font-size: 1.1rem; width: 40px; text-align: right; }
+    .s-name  { font-weight: 600; flex: 1; }
+    .s-range { color: var(--text-dim); font-size: 0.8rem; }
+
+    /* History */
+    .dist-chart { display: flex; flex-direction: column; gap: 6px; }
+    .dist-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+    .dist-lbl { min-width: 150px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dist-bar-bg { flex: 1; background: var(--surface2); border-radius: 4px; height: 16px; overflow: hidden; }
+    .dist-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.5s ease; }
+    .dist-cnt { min-width: 20px; text-align: right; color: var(--text-dim); }
+
+    .hist-list { display: flex; flex-direction: column; gap: 7px; }
+    .hist-item {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 9px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;
+    }
+    .hi-num { font-size: 0.72rem; color: var(--text-dim); min-width: 28px; }
+    .hi-cities { flex: 1; font-size: 0.83rem; }
+    .hi-cities span { color: var(--text-dim); }
+    .hi-grade { text-align: right; font-size: 0.83rem; font-weight: 600; }
+    .hi-deg   { font-size: 0.72rem; color: var(--text-dim); }
+
+    /* Feedback link */
+    .feedback-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--accent); text-decoration: none; font-size: 0.875rem;
+    }
+    .feedback-link:hover { text-decoration: underline; }
+
+    /* ── TOAST ───────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(70px);
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); padding: 9px 20px; border-radius: 20px;
+      font-size: 0.875rem; z-index: 200; transition: transform 0.3s ease; white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── COMMUNITY STATS ────────────────────────── */
+    .community-stats {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .community-stats-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .community-chart { display: flex; flex-direction: column; gap: 5px; }
+    .community-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+    .community-lbl { min-width: 110px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .community-bar-bg { flex: 1; background: var(--surface2); border-radius: 4px; height: 16px; overflow: hidden; }
+    .community-bar { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+    .community-bar.player-grade { background: var(--accent); }
+    .community-bar.other-grade { background: #3a4870; }
+    .community-pct { min-width: 42px; text-align: right; color: var(--text-dim); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+    .community-total {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 8px;
+    }
+
+    /* ── RESPONSIVE ──────────────────────────────── */
+    @media (max-width: 380px) {
+      #target-display { width: 280px; height: 280px; }
+      #compass-wrap   { width: 200px; height: 200px; }
+      .grade-name { font-size: 1.35rem; }
+      .intro-title { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+
+<body data-state="idle">
+
+  <header>
+    <div class="logo">
+      <div class="logo-compass">🧭</div>
+      <div class="logo-text">
+        <div class="logo-name">Directional</div>
+        <div class="puzzle-num" id="puzzle-num">#1</div>
+        <div class="test-badge" id="test-badge" style="display:none">Test Mode</div>
+      </div>
+    </div>
+    <div class="header-btns">
+      <a href="mailto:feedback@directional.global" class="icon-btn" title="Send Feedback">✉</a>
+      <button class="icon-btn" id="btn-history" title="My History">📊</button>
+      <button class="icon-btn" id="btn-help"    title="How to play">?</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── INTRO ── -->
+    <div class="panel" id="panel-intro">
+      <div class="intro-card">
+        <div class="intro-logo">🧭</div>
+        <div class="intro-title">Directional</div>
+        <div class="intro-desc">
+          Each day, two cities appear on screen.<br>
+          Set the <strong>compass bearing</strong> from the starting city to the target city.<br>
+          You have <strong>one chance</strong>. How good is your sense of direction?
+        </div>
+        <div class="intro-scoring">
+          <div class="scoring-row"><span class="s-emoji">🖖</span><span class="s-name">Capt. James T. Kirk</span><span class="s-range">&lt; 5°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🌊</span><span class="s-name">Moana</span><span class="s-range">5° – 14°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🗺️</span><span class="s-name">Dora the Explorer</span><span class="s-range">15° – 24°</span></div>
+          <div class="scoring-row"><span class="s-emoji">☠️</span><span class="s-name">Jack Sparrow</span><span class="s-range">25° – 34°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🏝️</span><span class="s-name">Gilligan</span><span class="s-range">35° – 44°</span></div>
+          <div class="scoring-row"><span class="s-emoji">⚓</span><span class="s-name">Odysseus</span><span class="s-range">45° +</span></div>
+        </div>
+        <button class="btn btn-primary btn-lg" id="btn-intro-start">Let's Play →</button>
+      </div>
+    </div>
+
+    <!-- ── IDLE ── -->
+    <div class="panel" id="panel-idle">
+      <div class="idle-card">
+        <div class="idle-label">Today's Challenge</div>
+        <div class="city-pair">
+          <div class="city-chip a" id="idle-city-a">—</div>
+          <div class="city-arrow">→</div>
+          <div class="city-chip b" id="idle-city-b">—</div>
+        </div>
+        <div class="idle-desc">
+          Set the compass bearing from the <strong>starting city</strong> to the <strong>target city</strong>.
+          You have <strong>one chance</strong> — think carefully before you submit!
+        </div>
+      </div>
+      <button class="btn btn-primary btn-lg" id="btn-start">Start →</button>
+    </div>
+
+    <!-- ── PLAYING ── -->
+    <div class="panel" id="panel-playing">
+
+      <!-- JF: Moved the "From" to above the compass to reduce confusion -->
+      <div class="from-label">
+        <div class="from-tag">From</div>
+        <div class="from-name" id="from-name">New York</div>
+      </div>
+
+      <div id="target-display">
+        <div id="target-label">
+          <div class="target-dot"></div>
+          <div class="target-name" id="target-name">TARGET</div>
+        </div>
+        <div id="compass-wrap">
+          <svg id="compass-svg" viewBox="-120 -120 240 240">
+            <circle r="115" fill="#0f1628" stroke="var(--border)" stroke-width="1.5"/>
+            <g id="compass-ticks"></g>
+            <circle r="108" fill="none" stroke="var(--border)" stroke-width="1"/>
+            <text x="0"   y="-84" text-anchor="middle" dominant-baseline="middle" fill="#ff5555" font-size="12" font-weight="700">N</text>
+            <text x="84"  y="0"   text-anchor="middle" dominant-baseline="middle" fill="var(--text-dim)" font-size="11" font-weight="600">E</text>
+            <text x="0"   y="84"  text-anchor="middle" dominant-baseline="middle" fill="var(--text-dim)" font-size="11" font-weight="600">S</text>
+            <text x="-84" y="0"   text-anchor="middle" dominant-baseline="middle" fill="var(--text-dim)" font-size="11" font-weight="600">W</text>
+            <g id="needle" transform="rotate(0)">
+              <polygon points="0,-76 -7,-8 7,-8"  fill="var(--needle-n)" opacity="0.95"/>
+              <polygon points="0,76 -7,8 7,8"     fill="var(--needle-s)" opacity="0.85"/>
+              <circle r="5.5" fill="#e2e8f8" stroke="#0f1628" stroke-width="1.5"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="bearing-display">
+        <div class="bearing-deg" id="bearing-deg">000°</div>
+        <div class="bearing-card" id="bearing-card">N</div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="btn-hint">💡 Hint</button>
+        <button class="btn btn-primary" id="btn-submit" style="flex:2">Submit →</button>
+      </div>
+
+      <div id="hint-reveal"></div>
+    </div>
+
+    <!-- ── RESULT ── -->
+    <div class="panel" id="panel-result">
+      <div class="grade-card">
+        <div class="grade-emoji" id="r-emoji">🖖</div>
+        <div class="grade-name"  id="r-name">Captain James T. Kirk</div>
+        <div class="grade-feedback" id="r-feedback">"Warp speed precision."</div>
+      </div>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-label">Your Guess</div>
+          <div class="stat-value" id="r-guess">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Correct</div>
+          <div class="stat-value" id="r-correct">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Off By</div>
+          <div class="stat-value" id="r-diff">—</div>
+        </div>
+      </div>
+      <div id="result-map"></div>
+      <div class="community-stats" id="community-stats-result" style="display:none">
+        <div class="community-stats-title">How others played today</div>
+        <div class="community-chart" id="community-chart-result"></div>
+        <div class="community-total" id="community-total-result"></div>
+      </div>
+      <div class="btn-row" style="max-width:100%">
+        <button class="btn btn-secondary" id="btn-r-history">📊 History</button>
+        <button class="btn btn-primary"   id="btn-r-share">📋 Share</button>
+      </div>
+      <button class="btn btn-secondary" id="btn-play-again" style="display:none;width:100%;max-width:340px">Play Again →</button>
+    </div>
+
+    <!-- ── DONE ── -->
+    <div class="panel" id="panel-done">
+      <div class="done-card">
+        <div class="done-title">Already played today!</div>
+        <div class="done-sub" id="done-sub">Come back tomorrow for a new puzzle.</div>
+      </div>
+      <div id="done-map"></div>
+      <div class="community-stats" id="community-stats-done" style="display:none">
+        <div class="community-stats-title">How others played today</div>
+        <div class="community-chart" id="community-chart-done"></div>
+        <div class="community-total" id="community-total-done"></div>
+      </div>
+      <div class="btn-row" style="max-width:100%">
+        <button class="btn btn-secondary" id="btn-d-history">📊 History</button>
+        <button class="btn btn-primary"   id="btn-d-share">📋 Share</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── MODAL: How to play ── -->
+  <div class="overlay" id="modal-help">
+    <div class="modal">
+      <div class="modal-hdr">
+        <!--JF: Reworded from "How to Play" to "Help"-->
+        <div class="modal-title">Help</div>
+        <button class="modal-close" data-close="modal-help">✕</button>
+      </div>
+      <div class="modal-section">
+	<!-- JF: Reworded and reformatted the instructions including indenting content below each heading-->
+        <h3><strong>How to Play</strong></h3>
+        <p style="margin-left: 20px;">A <strong>starting city</strong> sits at the compass center. Your mission: rotate the compass needle to point to the <strong>target city</strong>.</p>
+        <p style="margin-left: 20px;">You have <strong>one chance</strong>. No take-backs!</p>
+      </div>
+      <div class="modal-section">
+        <h3><strong>The Challenge</strong></h3>
+        <p style="margin-left: 20px;">The bearing is a <strong>rhumb line heading</strong> — the constant compass direction you'd follow to travel from one city to the other on a standard map.</p>
+        <p style="margin-left: 20px;">See how your navigation skills compare to some famous (fictional) explorers.</p>
+      </div>
+      <div class="modal-section">
+        <h3><strong>Scoring</strong></h3>
+        <div class="scoring-list">
+          <div class="scoring-row"><span class="s-emoji">🖖</span><span class="s-name">Capt. James T. Kirk</span><span class="s-range">&lt; 5°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🌊</span><span class="s-name">Moana</span><span class="s-range">5° – 14°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🗺️</span><span class="s-name">Dora the Explorer</span><span class="s-range">15° – 24°</span></div>
+          <div class="scoring-row"><span class="s-emoji">☠️</span><span class="s-name">Jack Sparrow</span><span class="s-range">25° – 34°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🏝️</span><span class="s-name">Gilligan</span><span class="s-range">35° – 44°</span></div>
+          <div class="scoring-row"><span class="s-emoji">⚓</span><span class="s-name">Odysseus</span><span class="s-range">45° or more</span></div>
+        </div>
+      </div>
+      <div class="modal-section">
+        <h3><strong>Tips</strong></h3>
+        <p style="margin-left: 20px;">Use <strong>💡 Hint</strong> to reveal which countries both cities are in. New puzzle every day at midnight UTC.</p>
+      </div>
+      <div class="modal-section">
+        <h3>Feedback</h3>
+        <p style="margin-left: 20px;"><a href="mailto:feedback@directional.global" class="feedback-link">✉ feedback@directional.global</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL: History ── -->
+  <div class="overlay" id="modal-history">
+    <div class="modal">
+      <div class="modal-hdr">
+        <div class="modal-title">My History</div>
+        <button class="modal-close" data-close="modal-history">✕</button>
+      </div>
+      <div class="modal-section">
+        <h3>Grade Distribution</h3>
+        <div class="dist-chart" id="dist-chart"></div>
+      </div>
+      <div class="modal-section">
+        <h3>Past Games</h3>
+        <div class="hist-list" id="hist-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+  // ═══════════════════════════════════════════════════════════════
+  // TEST MODE
+  // ═══════════════════════════════════════════════════════════════
+
+  // ═══════════════════════════════════════════════════════════════
+  // SUPABASE CONFIG (community stats)
+  // ═══════════════════════════════════════════════════════════════
+
+  const SUPABASE_URL = 'https://qnlzjddurxpfszhitreb.supabase.co';  // e.g. 'https://abcdefg.supabase.co'
+  const SUPABASE_KEY = 'sb_publishable_s0MLm4hC1PUsCwAK4HszUg_lLCQWmau';  // anon public key
+
+  const TEST_MODE = new URLSearchParams(location.search).has('test');
+  if (TEST_MODE) document.getElementById('test-badge').style.display = '';
+
+  // ═══════════════════════════════════════════════════════════════
+  // DATA
+  // ═══════════════════════════════════════════════════════════════
+
+  const CITIES = [
+    {id:'new_york',     name:'New York',       country:'United States',  lat:40.7128,  lon:-74.0060},
+    {id:'london',       name:'London',         country:'United Kingdom', lat:51.5074,  lon:-0.1278},
+    {id:'tokyo',        name:'Tokyo',          country:'Japan',          lat:35.6895,  lon:139.6917},
+    {id:'sydney',       name:'Sydney',         country:'Australia',      lat:-33.8688, lon:151.2093},
+    {id:'cairo',        name:'Cairo',          country:'Egypt',          lat:30.0444,  lon:31.2357},
+    {id:'moscow',       name:'Moscow',         country:'Russia',         lat:55.7558,  lon:37.6173},
+    {id:'beijing',      name:'Beijing',        country:'China',          lat:39.9042,  lon:116.4074},
+    {id:'mumbai',       name:'Mumbai',         country:'India',          lat:19.0760,  lon:72.8777},
+    {id:'sao_paulo',    name:'São Paulo',      country:'Brazil',         lat:-23.5505, lon:-46.6333},
+    {id:'los_angeles',  name:'Los Angeles',    country:'United States',  lat:34.0522,  lon:-118.2437},
+    {id:'paris',        name:'Paris',          country:'France',         lat:48.8566,  lon:2.3522},
+    {id:'dubai',        name:'Dubai',          country:'UAE',            lat:25.2048,  lon:55.2708},
+    {id:'singapore',    name:'Singapore',      country:'Singapore',      lat:1.3521,   lon:103.8198},
+    {id:'toronto',      name:'Toronto',        country:'Canada',         lat:43.6532,  lon:-79.3832},
+    {id:'chicago',      name:'Chicago',        country:'United States',  lat:41.8781,  lon:-87.6298},
+    {id:'berlin',       name:'Berlin',         country:'Germany',        lat:52.5200,  lon:13.4050},
+    {id:'madrid',       name:'Madrid',         country:'Spain',          lat:40.4168,  lon:-3.7038},
+    {id:'mexico_city',  name:'Mexico City',    country:'Mexico',         lat:19.4326,  lon:-99.1332},
+    {id:'johannesburg', name:'Johannesburg',   country:'South Africa',   lat:-26.2041, lon:28.0473},
+    {id:'buenos_aires', name:'Buenos Aires',   country:'Argentina',      lat:-34.6037, lon:-58.3816},
+    {id:'istanbul',     name:'Istanbul',       country:'Turkey',         lat:41.0082,  lon:28.9784},
+    {id:'bangkok',      name:'Bangkok',        country:'Thailand',       lat:13.7563,  lon:100.5018},
+    {id:'seoul',        name:'Seoul',          country:'South Korea',    lat:37.5665,  lon:126.9780},
+    {id:'lagos',        name:'Lagos',          country:'Nigeria',        lat:6.5244,   lon:3.3792},
+    {id:'lima',         name:'Lima',           country:'Peru',           lat:-12.0464, lon:-77.0428},
+    {id:'tehran',       name:'Tehran',         country:'Iran',           lat:35.6892,  lon:51.3890},
+    {id:'jakarta',      name:'Jakarta',        country:'Indonesia',      lat:-6.2088,  lon:106.8456},
+    {id:'nairobi',      name:'Nairobi',        country:'Kenya',          lat:-1.2921,  lon:36.8219},
+    {id:'amsterdam',    name:'Amsterdam',      country:'Netherlands',    lat:52.3676,  lon:4.9041},
+    {id:'rome',         name:'Rome',           country:'Italy',          lat:41.9028,  lon:12.4964},
+    {id:'stockholm',    name:'Stockholm',      country:'Sweden',         lat:59.3293,  lon:18.0686},
+    {id:'oslo',         name:'Oslo',           country:'Norway',         lat:59.9139,  lon:10.7522},
+    {id:'athens',       name:'Athens',         country:'Greece',         lat:37.9838,  lon:23.7275},
+    {id:'lisbon',       name:'Lisbon',         country:'Portugal',       lat:38.7169,  lon:-9.1395},
+    {id:'riyadh',       name:'Riyadh',         country:'Saudi Arabia',   lat:24.6877,  lon:46.7219},
+    {id:'karachi',      name:'Karachi',        country:'Pakistan',       lat:24.8607,  lon:67.0011},
+    {id:'hcm',          name:'Ho Chi Minh',    country:'Vietnam',        lat:10.8231,  lon:106.6297},
+    {id:'manila',       name:'Manila',         country:'Philippines',    lat:14.5995,  lon:120.9842},
+    {id:'kuala_lumpur', name:'Kuala Lumpur',   country:'Malaysia',       lat:3.1390,   lon:101.6869},
+    {id:'accra',        name:'Accra',          country:'Ghana',          lat:5.6037,   lon:-0.1870},
+    {id:'casablanca',   name:'Casablanca',     country:'Morocco',        lat:33.5731,  lon:-7.5898},
+    {id:'addis_ababa',  name:'Addis Ababa',    country:'Ethiopia',       lat:9.1450,   lon:40.4897},
+    {id:'santiago',     name:'Santiago',       country:'Chile',          lat:-33.4489, lon:-70.6693},
+    {id:'bogota',       name:'Bogotá',         country:'Colombia',       lat:4.7110,   lon:-74.0721},
+    {id:'montreal',     name:'Montreal',       country:'Canada',         lat:45.5017,  lon:-73.5673},
+    {id:'vancouver',    name:'Vancouver',      country:'Canada',         lat:49.2827,  lon:-123.1207},
+    {id:'miami',        name:'Miami',          country:'United States',  lat:25.7617,  lon:-80.1918},
+    {id:'san_francisco',name:'San Francisco',  country:'United States',  lat:37.7749,  lon:-122.4194},
+    {id:'seattle',      name:'Seattle',        country:'United States',  lat:47.6062,  lon:-122.3321},
+    {id:'cape_town',    name:'Cape Town',      country:'South Africa',   lat:-33.9249, lon:18.4241},
+    {id:'auckland',     name:'Auckland',       country:'New Zealand',    lat:-36.8509, lon:174.7645},
+    {id:'perth',        name:'Perth',          country:'Australia',      lat:-31.9505, lon:115.8605},
+    {id:'melbourne',    name:'Melbourne',      country:'Australia',      lat:-37.8136, lon:144.9631},
+    {id:'osaka',        name:'Osaka',          country:'Japan',          lat:34.6937,  lon:135.5023},
+    {id:'taipei',       name:'Taipei',         country:'Taiwan',         lat:25.0330,  lon:121.5654},
+    {id:'hong_kong',    name:'Hong Kong',      country:'Hong Kong',      lat:22.3193,  lon:114.1694},
+    {id:'shanghai',     name:'Shanghai',       country:'China',          lat:31.2304,  lon:121.4737},
+    {id:'tel_aviv',     name:'Tel Aviv',       country:'Israel',         lat:32.0853,  lon:34.7818},
+    {id:'new_delhi',    name:'New Delhi',      country:'India',          lat:28.6139,  lon:77.2090},
+    {id:'denver',       name:'Denver',         country:'United States',  lat:39.7392,  lon:-104.9903},
+    {id:'vienna',       name:'Vienna',         country:'Austria',        lat:48.2082,  lon:16.3738},
+    {id:'prague',       name:'Prague',         country:'Czech Republic', lat:50.0755,  lon:14.4378},
+    {id:'warsaw',       name:'Warsaw',         country:'Poland',         lat:52.2297,  lon:21.0122},
+    {id:'kyiv',         name:'Kyiv',           country:'Ukraine',        lat:50.4501,  lon:30.5234},
+    {id:'helsinki',     name:'Helsinki',       country:'Finland',        lat:60.1699,  lon:24.9384},
+    {id:'reykjavik',    name:'Reykjavik',      country:'Iceland',        lat:64.1466,  lon:-21.9426},
+    {id:'dublin',       name:'Dublin',         country:'Ireland',        lat:53.3498,  lon:-6.2603},
+    {id:'barcelona',    name:'Barcelona',      country:'Spain',          lat:41.3851,  lon:2.1734},
+    {id:'milan',        name:'Milan',          country:'Italy',          lat:45.4654,  lon:9.1859},
+    {id:'frankfurt',    name:'Frankfurt',      country:'Germany',        lat:50.1109,  lon:8.6821},
+    {id:'brussels',     name:'Brussels',       country:'Belgium',        lat:50.8503,  lon:4.3517},
+    {id:'zurich',       name:'Zurich',         country:'Switzerland',    lat:47.3769,  lon:8.5417},
+    {id:'beirut',       name:'Beirut',         country:'Lebanon',        lat:33.8938,  lon:35.5018},
+    {id:'doha',         name:'Doha',           country:'Qatar',          lat:25.2854,  lon:51.5310},
+    {id:'ankara',       name:'Ankara',         country:'Turkey',         lat:39.9334,  lon:32.8597},
+    {id:'tashkent',     name:'Tashkent',       country:'Uzbekistan',     lat:41.2995,  lon:69.2401},
+    {id:'almaty',       name:'Almaty',         country:'Kazakhstan',     lat:43.2220,  lon:76.8512},
+    {id:'vladivostok',  name:'Vladivostok',    country:'Russia',         lat:43.1332,  lon:131.9113},
+    {id:'st_pet',       name:'St. Petersburg', country:'Russia',         lat:59.9311,  lon:30.3609},
+    {id:'dar_es_salaam',name:'Dar es Salaam',  country:'Tanzania',       lat:-6.7924,  lon:39.2083},
+    {id:'kinshasa',     name:'Kinshasa',       country:'DR Congo',       lat:-4.4419,  lon:15.2663},
+    {id:'luanda',       name:'Luanda',         country:'Angola',         lat:-8.8390,  lon:13.2894},
+    {id:'maputo',       name:'Maputo',         country:'Mozambique',     lat:-25.9692, lon:32.5732},
+    {id:'harare',       name:'Harare',         country:'Zimbabwe',       lat:-17.8252, lon:31.0335},
+    {id:'dakar',        name:'Dakar',          country:'Senegal',        lat:14.7167,  lon:-17.4677},
+    {id:'tunis',        name:'Tunis',          country:'Tunisia',        lat:36.8190,  lon:10.1658},
+    {id:'algiers',      name:'Algiers',        country:'Algeria',        lat:36.7372,  lon:3.0865},
+    {id:'muscat',       name:'Muscat',         country:'Oman',           lat:23.5880,  lon:58.3829},
+    {id:'havana',       name:'Havana',         country:'Cuba',           lat:23.1136,  lon:-82.3666},
+    {id:'quito',        name:'Quito',          country:'Ecuador',        lat:-0.1807,  lon:-78.4678},
+    {id:'montevideo',   name:'Montevideo',     country:'Uruguay',        lat:-34.9011, lon:-56.1645},
+    {id:'recife',       name:'Recife',         country:'Brazil',         lat:-8.0476,  lon:-34.8770},
+    {id:'brasilia',     name:'Brasília',       country:'Brazil',         lat:-15.7942, lon:-47.8825},
+    {id:'colombo',      name:'Colombo',        country:'Sri Lanka',      lat:6.9271,   lon:79.8612},
+    {id:'dhaka',        name:'Dhaka',          country:'Bangladesh',     lat:23.8103,  lon:90.4125},
+    {id:'yangon',       name:'Yangon',         country:'Myanmar',        lat:16.8661,  lon:96.1951},
+    {id:'hanoi',        name:'Hanoi',          country:'Vietnam',        lat:21.0285,  lon:105.8542},
+    {id:'kigali',       name:'Kigali',         country:'Rwanda',         lat:-1.9706,  lon:30.1044},
+    {id:'kampala',      name:'Kampala',        country:'Uganda',         lat:0.3476,   lon:32.5825},
+    {id:'khartoum',     name:'Khartoum',       country:'Sudan',          lat:15.5007,  lon:32.5599},
+    {id:'bamako',       name:'Bamako',         country:'Mali',           lat:12.6392,  lon:-8.0029},
+    {id:'abidjan',      name:'Abidjan',        country:"Côte d'Ivoire",  lat:5.3600,   lon:-4.0083},
+  ];
+
+  const CITY_MAP = Object.fromEntries(CITIES.map(c => [c.id, c]));
+
+  // ═══════════════════════════════════════════════════════════════
+  // ALGORITHMIC PAIR GENERATION (10+ years of unique pairs)
+  // ═══════════════════════════════════════════════════════════════
+
+  // Mulberry32 PRNG — deterministic, seeded
+  function mulberry32(seed) {
+    return function() {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // Haversine distance in km
+  function haversineKm(a, b) {
+    const R = Math.PI / 180, Er = 6371;
+    const dLat = (b.lat - a.lat) * R, dLon = (b.lon - a.lon) * R;
+    const s = Math.sin(dLat/2)**2 + Math.cos(a.lat*R) * Math.cos(b.lat*R) * Math.sin(dLon/2)**2;
+    return 2 * Er * Math.asin(Math.sqrt(s));
+  }
+
+  // Generate and shuffle all valid pairs
+  let _allPairs = null;
+  function getAllPairs() {
+    if (_allPairs) return _allPairs;
+    const pairs = [];
+    for (let i = 0; i < CITIES.length; i++) {
+      for (let j = 0; j < CITIES.length; j++) {
+        if (i === j) continue;
+        if (CITIES[i].country === CITIES[j].country) continue;
+        if (haversineKm(CITIES[i], CITIES[j]) < 800) continue;
+        pairs.push([CITIES[i].id, CITIES[j].id]);
+      }
+    }
+    // Seeded Fisher-Yates shuffle for deterministic ordering
+    const rng = mulberry32(314159265);
+    for (let i = pairs.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+    }
+    _allPairs = pairs;
+    return pairs;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRADES & FEEDBACK
+  // ═══════════════════════════════════════════════════════════════
+
+  const GRADES = [
+    { name:'Captain James T. Kirk', emoji:'🖖', max:5, msgs:[
+      'Space may be the final frontier, but you\'ve clearly mastered this one.',
+      'Warp speed precision. Scotty is impressed.',
+      'Captain\'s log: nailed it.',
+      'The Enterprise couldn\'t have charted a better course.',
+      'Boldly going exactly where you needed to go.',
+      'Kirk didn\'t guess. Kirk knew.'
+    ]},
+    { name:'Moana', emoji:'🌊', max:15, msgs:[
+      'The ocean called. You mostly heard it.',
+      'Close enough that the fish are genuinely impressed.',
+      'Te Fiti approves. Mostly.',
+      'You know the way! Well, approximately the way.',
+      'Gramma Tala is smiling — with minor geographical caveats.',
+      'The ocean chose you. It has reasonable standards.'
+    ]},
+    { name:'Dora the Explorer', emoji:'🗺️', max:25, msgs:[
+      'Can you say "close enough"? ¡Muy bien!',
+      'Backpack didn\'t have a better compass.',
+      'Map says you\'re in the neighborhood. Loosely.',
+      'Swiper, no swiping your dignity. Not yet.',
+      'You explored! Just... a bit more than necessary.',
+      'Boots is giving you a polite golf clap.'
+    ]},
+    { name:'Jack Sparrow', emoji:'☠️', max:35, msgs:[
+      '"That\'s not — no wait — hmm." Close-ish, mate.',
+      'The compass doesn\'t point north. Neither did yours.',
+      'You sail boldly, if somewhat sideways.',
+      'Rum was involved in this heading, wasn\'t it.',
+      'Savvy? Mostly savvy.',
+      'The Black Pearl has sailed stranger courses. Barely.'
+    ]},
+    { name:'Gilligan', emoji:'🏝️', max:45, msgs:[
+      'Three-hour tour. Went a bit sideways. A lot sideways.',
+      'You\'ll be rescued eventually. Probably.',
+      'The Skipper has opinions. None of them flattering.',
+      'At least you\'re on an island! Somewhere.',
+      'The Professor is building something to correct for this.',
+      'A tale of the sea — and of missing the sea considerably.'
+    ]},
+    { name:'Odysseus', emoji:'⚓', max:Infinity, msgs:[
+      'A decade-long journey. The long way round.',
+      'Poseidon himself couldn\'t have sent you more off course.',
+      'Epic poetry will be written about this navigational disaster.',
+      'You will return home. Eventually. After many trials.',
+      'The Cyclops was actually in that direction.',
+      'This is either very brave or very wrong. Possibly both.'
+    ]},
+  ];
+
+  function getGrade(diff) {
+    return GRADES.find(g => diff < g.max) || GRADES[GRADES.length - 1];
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DAILY SEED
+  // ═══════════════════════════════════════════════════════════════
+
+  const LAUNCH_UTC = Date.UTC(2026, 0, 1);
+
+  function getDayIndex() {
+    const n = new Date();
+    return Math.max(0, Math.floor(
+      (Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) - LAUNCH_UTC) / 86400000
+    ));
+  }
+
+  function getTodaysPair() {
+    const di = getDayIndex();
+    const pairs = getAllPairs();
+    const [idA, idB] = pairs[di % pairs.length];
+    return { cityA: CITY_MAP[idA], cityB: CITY_MAP[idB], puzzleNumber: di + 1, dayIndex: di };
+  }
+
+  function getRandomPair() {
+    const pairs = getAllPairs();
+    const [idA, idB] = pairs[Math.floor(Math.random() * pairs.length)];
+    const di = getDayIndex();
+    return { cityA: CITY_MAP[idA], cityB: CITY_MAP[idB], puzzleNumber: di + 1, dayIndex: di };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BEARING MATH (Rhumb Line)
+  // ═══════════════════════════════════════════════════════════════
+
+  function calcBearing(lat1, lon1, lat2, lon2) {
+    const R = Math.PI / 180;
+    const phi1 = lat1 * R, phi2 = lat2 * R;
+    let dLambda = (lon2 - lon1) * R;
+    const dPhi = Math.log(
+      Math.tan(Math.PI / 4 + phi2 / 2) / Math.tan(Math.PI / 4 + phi1 / 2)
+    );
+    // Wrap longitude difference to [-PI, PI]
+    if (Math.abs(dLambda) > Math.PI) {
+      dLambda = dLambda > 0 ? -(2 * Math.PI - dLambda) : (2 * Math.PI + dLambda);
+    }
+    return (Math.atan2(dLambda, dPhi) * 180 / Math.PI + 360) % 360;
+  }
+
+  function angularDiff(a, b) {
+    const d = Math.abs(a - b);
+    return Math.min(d, 360 - d);
+  }
+
+  function toCardinal(deg) {
+    const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // STORAGE
+  // ═══════════════════════════════════════════════════════════════
+
+  const STORE_KEY = 'directional_v1';
+  const VISITED_KEY = 'directional_visited';
+
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; }
+  }
+
+  function saveResult(entry) {
+    if (TEST_MODE) return; // Don't save test mode results
+    try {
+      const h = loadHistory();
+      const i = h.findIndex(e => e.dayIndex === entry.dayIndex);
+      if (i >= 0) h[i] = entry; else h.unshift(entry);
+      localStorage.setItem(STORE_KEY, JSON.stringify(h.slice(0, 365)));
+    } catch {}
+  }
+
+  function getTodaysResult() {
+    if (TEST_MODE) return null; // Always allow replay in test mode
+    return loadHistory().find(e => e.dayIndex === getDayIndex()) || null;
+  }
+
+  function hasVisited() {
+    try { return localStorage.getItem(VISITED_KEY) === 'true'; } catch { return false; }
+  }
+
+  function markVisited() {
+    try { localStorage.setItem(VISITED_KEY, 'true'); } catch {}
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COMPASS
+  // ═══════════════════════════════════════════════════════════════
+
+  let currentBearing = 0;
+
+  const compassSvg   = document.getElementById('compass-svg');
+  const needleEl     = document.getElementById('needle');
+  const targetLabel  = document.getElementById('target-label');
+  const bearingDegEl = document.getElementById('bearing-deg');
+  const bearingCardEl= document.getElementById('bearing-card');
+
+  const DISPLAY_C = 160;
+  const ORBIT_R   = 140;
+
+  function buildTicks() {
+    const g = document.getElementById('compass-ticks');
+    for (let i = 0; i < 360; i += 5) {
+      if (i % 90 === 0) continue;
+      const isMajor = i % 45 === 0;
+      const len = isMajor ? 14 : 7;
+      const rad = i * Math.PI / 180;
+      const r1 = 108, r2 = 108 - len;
+      const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      ln.setAttribute('x1', Math.sin(rad) * r1); ln.setAttribute('y1', -Math.cos(rad) * r1);
+      ln.setAttribute('x2', Math.sin(rad) * r2); ln.setAttribute('y2', -Math.cos(rad) * r2);
+      ln.setAttribute('stroke', isMajor ? '#3a4870' : '#212d4a');
+      ln.setAttribute('stroke-width', isMajor ? '1.5' : '1');
+      g.appendChild(ln);
+    }
+  }
+
+  function setNeedle(deg) {
+    currentBearing = ((deg % 360) + 360) % 360;
+    needleEl.setAttribute('transform', `rotate(${currentBearing})`);
+    bearingDegEl.textContent  = `${Math.round(currentBearing).toString().padStart(3,'0')}°`;
+    bearingCardEl.textContent = toCardinal(currentBearing);
+
+    const rad = currentBearing * Math.PI / 180;
+    targetLabel.style.left = (DISPLAY_C + Math.sin(rad) * ORBIT_R) + 'px';
+    targetLabel.style.top  = (DISPLAY_C - Math.cos(rad) * ORBIT_R) + 'px';
+  }
+
+  function angleFromEvent(e) {
+    const rect = compassSvg.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+    const px = e.touches ? e.touches[0].clientX : e.clientX;
+    const py = e.touches ? e.touches[0].clientY : e.clientY;
+    return (Math.atan2(px - cx, -(py - cy)) * 180 / Math.PI + 360) % 360;
+  }
+
+  let dragging = false;
+
+  function initCompass() {
+    buildTicks();
+    compassSvg.addEventListener('mousedown',  e => { dragging = true; setNeedle(angleFromEvent(e)); e.preventDefault(); });
+    compassSvg.addEventListener('touchstart', e => { dragging = true; setNeedle(angleFromEvent(e)); e.preventDefault(); }, { passive: false });
+    window.addEventListener('mousemove',  e => { if (dragging) setNeedle(angleFromEvent(e)); });
+    window.addEventListener('touchmove',  e => { if (dragging) { setNeedle(angleFromEvent(e)); e.preventDefault(); } }, { passive: false });
+    window.addEventListener('mouseup',   () => { dragging = false; });
+    window.addEventListener('touchend',  () => { dragging = false; });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // D3 MERCATOR MAP
+  // ═══════════════════════════════════════════════════════════════
+
+  let _worldData = null;
+
+  async function getWorldData() {
+    if (_worldData) return _worldData;
+    const r = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+    _worldData = await r.json();
+    return _worldData;
+  }
+
+  async function drawMap(containerId, cityA, cityB, guessBearing, trueBearing) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '<div style="height:180px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:0.8rem">Loading map…</div>';
+
+    let topo;
+    try { topo = await getWorldData(); }
+    catch {
+      container.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim);font-size:0.8rem">Map unavailable offline.</div>';
+      return;
+    }
+
+    const W = Math.max(container.clientWidth || 0, 300);
+    const H = Math.round(W * 0.52);
+
+    const countries = topojson.feature(topo, topo.objects.countries);
+    const borders   = topojson.mesh(topo, topo.objects.countries, (a, b) => a !== b);
+
+    // Center map on midpoint between the two cities
+    let dLon = cityB.lon - cityA.lon;
+    if (dLon > 180) dLon -= 360;
+    if (dLon < -180) dLon += 360;
+    let midLon = cityA.lon + dLon / 2;
+    if (midLon > 180) midLon -= 360;
+    if (midLon < -180) midLon += 360;
+    const midLat = (cityA.lat + cityB.lat) / 2;
+
+    const proj = d3.geoMercator().rotate([-midLon, 0]).center([0, midLat]).scale(W / 6.4).translate([W / 2, H / 2]);
+    const path = d3.geoPath().projection(proj);
+
+    const svg = d3.create('svg').attr('viewBox', `0 0 ${W} ${H}`);
+
+    svg.append('defs').append('clipPath').attr('id', `clip-${containerId}`)
+      .append('rect').attr('width', W).attr('height', H);
+
+    svg.append('rect').attr('width', W).attr('height', H).attr('fill', '#060e1c');
+
+    const mapG = svg.append('g').attr('clip-path', `url(#clip-${containerId})`);
+
+    mapG.append('g').selectAll('path').data(countries.features).join('path')
+      .attr('d', path).attr('fill', '#152032').attr('stroke', 'none');
+
+    mapG.append('path').datum(borders).attr('d', path)
+      .attr('fill', 'none').attr('stroke', '#243352').attr('stroke-width', '0.6');
+
+    // City positions on projection
+    const ptA = proj([cityA.lon, cityA.lat]);
+    const ptB = proj([cityB.lon, cityB.lat]);
+
+    // Rhumb line = straight line on Mercator
+    if (ptA && ptB) {
+      mapG.append('line')
+        .attr('x1', ptA[0]).attr('y1', ptA[1])
+        .attr('x2', ptB[0]).attr('y2', ptB[1])
+        .attr('stroke', '#4f9cff').attr('stroke-width', '2.5')
+        .attr('stroke-dasharray', '6 3').attr('opacity', '0.9');
+    }
+
+    // Guess ray — extend a line from city A in the guess bearing direction
+    if (ptA) {
+      const rayLen = Math.max(W, H) * 1.5;
+      const gRad = guessBearing * Math.PI / 180;
+      // On Mercator, bearing angle maps to screen: right=East, up=North
+      const gx = ptA[0] + Math.sin(gRad) * rayLen;
+      const gy = ptA[1] - Math.cos(gRad) * rayLen;
+      mapG.append('line')
+        .attr('x1', ptA[0]).attr('y1', ptA[1])
+        .attr('x2', gx).attr('y2', gy)
+        .attr('stroke', '#ff9944').attr('stroke-width', '1.5')
+        .attr('stroke-dasharray', '5 4').attr('opacity', '0.45');
+    }
+
+    // City dots + labels
+    function addCity(lon, lat, color, label) {
+      const pt = proj([lon, lat]);
+      if (!pt) return;
+      const [px, py] = pt;
+      mapG.append('circle').attr('cx', px).attr('cy', py).attr('r', 6)
+        .attr('fill', color).attr('stroke', '#060e1c').attr('stroke-width', 1.5);
+      const flipLeft = px > W - 85;
+      mapG.append('text')
+        .attr('x', px + (flipLeft ? -10 : 10)).attr('y', py + 4)
+        .attr('text-anchor', flipLeft ? 'end' : 'start')
+        .attr('fill', '#e2e8f8').attr('font-size', '11').attr('font-weight', '700')
+        .attr('paint-order', 'stroke').attr('stroke', '#060e1c').attr('stroke-width', '3')
+        .text(label);
+    }
+    //JF: Added START and END
+    addCity(cityA.lon, cityA.lat, '#4cdf8a', cityA.name + " (START)");
+    addCity(cityB.lon, cityB.lat, '#ff6b6b', cityB.name + " (END)");
+
+    // Legend
+    const LX = 8, LY = H - 46;
+    const leg = svg.append('g');
+    leg.append('rect').attr('x', LX).attr('y', LY).attr('width', 174).attr('height', 40)
+      .attr('rx', 6).attr('fill', '#060e1c').attr('opacity', 0.85);
+    leg.append('line').attr('x1', LX+8).attr('y1', LY+13).attr('x2', LX+26).attr('y2', LY+13)
+      .attr('stroke', '#4f9cff').attr('stroke-width', 2.5).attr('stroke-dasharray', '5 2');
+    leg.append('text').attr('x', LX+32).attr('y', LY+17).attr('fill', '#6b7aa0').attr('font-size', 9)
+      .text(`Correct: ${Math.round(trueBearing)}° ${toCardinal(trueBearing)}`);
+    leg.append('line').attr('x1', LX+8).attr('y1', LY+30).attr('x2', LX+26).attr('y2', LY+30)
+      .attr('stroke', '#ff9944').attr('stroke-width', 1.5).attr('stroke-dasharray', '4 3');
+    leg.append('text').attr('x', LX+32).attr('y', LY+34).attr('fill', '#6b7aa0').attr('font-size', 9)
+      .text(`Your guess: ${Math.round(guessBearing)}° ${toCardinal(guessBearing)}`);
+
+    container.innerHTML = '';
+    container.appendChild(svg.node());
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // UI HELPERS
+  // ═══════════════════════════════════════════════════════════════
+
+  function setState(s) { document.body.setAttribute('data-state', s); }
+
+  function showToast(msg, ms = 2600) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  function openModal(id)  { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  // ═══════════════════════════════════════════════════════════════
+  // HISTORY MODAL
+  // ═══════════════════════════════════════════════════════════════
+
+  function renderHistory() {
+    const hist = loadHistory();
+    const counts = {};
+    GRADES.forEach(g => counts[g.name] = 0);
+    hist.forEach(e => { if (counts[e.grade] !== undefined) counts[e.grade]++; });
+    const total = hist.length || 1;
+
+    const distEl = document.getElementById('dist-chart');
+    distEl.innerHTML = '';
+    GRADES.forEach(g => {
+      const n = counts[g.name];
+      const pct = Math.round((n / total) * 100);
+      const row = document.createElement('div');
+      row.className = 'dist-row';
+      row.innerHTML = `
+        <div class="dist-lbl">${g.emoji} ${g.name}</div>
+        <div class="dist-bar-bg"><div class="dist-bar" style="width:${n > 0 ? Math.max(pct, 6) : 0}%"></div></div>
+        <div class="dist-cnt">${n}</div>`;
+      distEl.appendChild(row);
+    });
+
+    const listEl = document.getElementById('hist-list');
+    listEl.innerHTML = '';
+    if (!hist.length) {
+      listEl.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem">No games yet — play your first!</p>';
+      return;
+    }
+    hist.slice(0, 30).forEach(e => {
+      const g = GRADES.find(g => g.name === e.grade) || GRADES[GRADES.length - 1];
+      const item = document.createElement('div');
+      item.className = 'hist-item';
+      item.innerHTML = `
+        <div class="hi-num">#${e.puzzleNum}</div>
+        <div class="hi-cities">${e.cityA} <span>→</span> ${e.cityB}</div>
+        <div class="hi-grade">${g.emoji} ${e.grade}<div class="hi-deg">${Math.round(e.diff)}° off</div></div>`;
+      listEl.appendChild(item);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SHARE
+  // ═══════════════════════════════════════════════════════════════
+
+  function buildShareText(pair, diff, gradeName) {
+    const g = GRADES.find(g => g.name === gradeName) || GRADES[GRADES.length - 1];
+    return `🧭 Directional #${pair.puzzleNumber}\n${pair.cityA.name} → ${pair.cityB.name}\n${g.emoji} ${gradeName} (off by ${Math.round(diff)}°)\nPlay: directional.global`;
+  }
+
+  function share(text) {
+    if (navigator.share) {
+      navigator.share({ text }).catch(() => copyText(text));
+    } else {
+      copyText(text);
+    }
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!'));
+    } else {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Copied to clipboard!');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COMMUNITY STATS (Supabase)
+  // ═══════════════════════════════════════════════════════════════
+
+  function hasPostedScore(dayIndex) {
+    try { return localStorage.getItem(`directional_posted_${dayIndex}`) === 'true'; } catch { return false; }
+  }
+
+  function markPostedScore(dayIndex) {
+    try { localStorage.setItem(`directional_posted_${dayIndex}`, 'true'); } catch {}
+  }
+
+  function postScore(dayIndex, gradeName) {
+    if (!SUPABASE_URL || TEST_MODE || hasPostedScore(dayIndex)) return;
+    fetch(`${SUPABASE_URL}/rest/v1/scores`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ day_index: dayIndex, grade: gradeName })
+    }).then(() => markPostedScore(dayIndex)).catch(() => {});
+  }
+
+  function renderCommunityChart(chartEl, totalEl, wrapper, counts, total, playerGrade) {
+    chartEl.innerHTML = '';
+    GRADES.forEach(g => {
+      const n = counts[g.name];
+      const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+      const isPlayer = g.name === playerGrade;
+      const row = document.createElement('div');
+      row.className = 'community-row';
+      row.innerHTML = `
+        <div class="community-lbl">${g.emoji} ${g.name}</div>
+        <div class="community-bar-bg"><div class="community-bar ${isPlayer ? 'player-grade' : 'other-grade'}" style="width:${n > 0 ? Math.max(pct, 6) : 0}%"></div></div>
+        <div class="community-pct">${pct}% (${n})</div>`;
+      chartEl.appendChild(row);
+    });
+    totalEl.textContent = `${total} player${total !== 1 ? 's' : ''} today`;
+    wrapper.style.display = '';
+  }
+
+  async function loadCommunityStats(dayIndex, suffix, playerGrade) {
+    if (!SUPABASE_URL) return;
+    const wrapper = document.getElementById(`community-stats-${suffix}`);
+    const chartEl = document.getElementById(`community-chart-${suffix}`);
+    const totalEl = document.getElementById(`community-total-${suffix}`);
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/scores?day_index=eq.${dayIndex}&select=grade`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (!res.ok) throw new Error(res.status);
+      const rows = await res.json();
+      const counts = {};
+      GRADES.forEach(g => counts[g.name] = 0);
+      rows.forEach(r => { if (counts[r.grade] !== undefined) counts[r.grade]++; });
+      const total = rows.length;
+      if (total > 0) {
+        renderCommunityChart(chartEl, totalEl, wrapper, counts, total, playerGrade);
+      }
+    } catch {
+      wrapper.style.display = 'none';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SHOW RESULT
+  // ═══════════════════════════════════════════════════════════════
+
+  function showResult(pair, guess, trueBearing, diff) {
+    const grade    = getGrade(diff);
+    // Feedback varies each time (random, not day-seeded)
+    const feedback = grade.msgs[Math.floor(Math.random() * grade.msgs.length)];
+
+    saveResult({
+      dayIndex: pair.dayIndex, puzzleNum: pair.puzzleNumber,
+      cityA: pair.cityA.name, cityB: pair.cityB.name,
+      guess: Math.round(guess), correct: Math.round(trueBearing),
+      diff, grade: grade.name
+    });
+
+    document.getElementById('r-emoji').textContent    = grade.emoji;
+    document.getElementById('r-name').textContent     = grade.name;
+    document.getElementById('r-feedback').textContent = `"${feedback}"`;
+    document.getElementById('r-guess').textContent    = `${Math.round(guess)}° ${toCardinal(guess)}`;
+    document.getElementById('r-correct').textContent  = `${Math.round(trueBearing)}° ${toCardinal(trueBearing)}`;
+    document.getElementById('r-diff').textContent     = `${Math.round(diff)}°`;
+
+    drawMap('result-map', pair.cityA, pair.cityB, guess, trueBearing);
+
+    postScore(pair.dayIndex, grade.name);
+    loadCommunityStats(pair.dayIndex, 'result', grade.name);
+
+    const txt = buildShareText(pair, diff, grade.name);
+    document.getElementById('btn-r-share').onclick   = () => share(txt);
+    document.getElementById('btn-r-history').onclick = () => { renderHistory(); openModal('modal-history'); };
+
+    // Test mode: show play-again button
+    const playAgainBtn = document.getElementById('btn-play-again');
+    if (TEST_MODE) {
+      playAgainBtn.style.display = '';
+      playAgainBtn.onclick = () => startNewGame();
+    } else {
+      playAgainBtn.style.display = 'none';
+    }
+
+    setState('result');
+  }
+
+  function showDone(entry, pair) {
+    const g = GRADES.find(g => g.name === entry.grade) || GRADES[GRADES.length - 1];
+    document.getElementById('done-sub').textContent =
+      `${g.emoji} ${entry.grade} — ${Math.round(entry.diff)}° off. Come back tomorrow!`;
+    drawMap('done-map', pair.cityA, pair.cityB, entry.guess, entry.correct);
+    loadCommunityStats(pair.dayIndex, 'done', entry.grade);
+    const txt = buildShareText(pair, entry.diff, entry.grade);
+    document.getElementById('btn-d-share').onclick   = () => share(txt);
+    document.getElementById('btn-d-history').onclick = () => { renderHistory(); openModal('modal-history'); };
+    setState('done');
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GAME START (used by both normal and test mode)
+  // ═══════════════════════════════════════════════════════════════
+
+  function startNewGame() {
+    const pair = TEST_MODE ? getRandomPair() : getTodaysPair();
+    window._pair = pair;
+
+    document.getElementById('puzzle-num').textContent = `#${pair.puzzleNumber}`;
+    document.getElementById('target-name').textContent = pair.cityB.name.toUpperCase();
+    document.getElementById('from-name').textContent   = pair.cityA.name;
+
+    document.getElementById('idle-city-a').textContent = pair.cityA.name;
+    document.getElementById('idle-city-b').textContent = pair.cityB.name;
+
+    document.getElementById('hint-reveal').classList.remove('visible');
+    document.getElementById('btn-hint').disabled = false;
+    //JF: Set the needle to 180 rather than 0 at the start
+    setNeedle(180);
+
+    // In test mode, skip idle and go straight to playing
+    if (TEST_MODE) {
+      setState('playing');
+    } else {
+      setState('idle');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BOOT
+  // ═══════════════════════════════════════════════════════════════
+
+  function init() {
+    const pair = TEST_MODE ? getRandomPair() : getTodaysPair();
+    window._pair = pair;
+
+    document.getElementById('puzzle-num').textContent = `#${pair.puzzleNumber}`;
+    document.getElementById('target-name').textContent = pair.cityB.name.toUpperCase();
+    document.getElementById('from-name').textContent   = pair.cityA.name;
+
+    initCompass();
+    //JF: Set the needle to 180 rather than 0 at the start
+    setNeedle(180);
+
+    // Already played today? (skipped in test mode)
+    const prev = getTodaysResult();
+    if (prev) { showDone(prev, pair); return; }
+
+    // First-time intro screen
+    if (!hasVisited() && !TEST_MODE) {
+      setState('intro');
+      document.getElementById('btn-intro-start').onclick = () => {
+        markVisited();
+        setState('idle');
+      };
+    } else if (TEST_MODE) {
+      setState('playing');
+    } else {
+      setState('idle');
+    }
+
+    // Idle state setup
+    document.getElementById('idle-city-a').textContent = pair.cityA.name;
+    document.getElementById('idle-city-b').textContent = pair.cityB.name;
+
+    // Buttons
+    document.getElementById('btn-start').onclick = () => {
+      document.getElementById('hint-reveal').classList.remove('visible');
+      document.getElementById('btn-hint').disabled = false;
+      //JF: Set the needle to 180 rather than 0 at the start
+      setNeedle(180);
+      setState('playing');
+    };
+
+    document.getElementById('btn-submit').onclick = () => {
+      const p = window._pair;
+      const tb = calcBearing(p.cityA.lat, p.cityA.lon, p.cityB.lat, p.cityB.lon);
+      showResult(p, currentBearing, tb, angularDiff(currentBearing, tb));
+    };
+
+    //JF: Added a line break in the hint. 
+    document.getElementById('btn-hint').onclick = () => {
+      const p = window._pair;
+      const el = document.getElementById('hint-reveal');
+      el.innerHTML = `<strong>${p.cityA.name}</strong> is in <strong>${p.cityA.country}</strong>.&nbsp;
+        <p><strong>${p.cityB.name}</strong> is in <strong>${p.cityB.country}</strong>.`;
+      el.classList.add('visible');
+      document.getElementById('btn-hint').disabled = true;
+    };
+
+    document.getElementById('btn-history').onclick = () => { renderHistory(); openModal('modal-history'); };
+    document.getElementById('btn-help').onclick    = () => openModal('modal-help');
+
+    document.querySelectorAll('[data-close]').forEach(b =>
+      b.addEventListener('click', () => closeModal(b.dataset.close))
+    );
+    document.querySelectorAll('.overlay').forEach(o =>
+      o.addEventListener('click', e => { if (e.target === o) closeModal(o.id); })
+    );
+  }
+
+  init();
+  </script>
+</body>
+</html>
