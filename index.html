@@ -1142,9 +1142,10 @@
   // SHARE
   // ═══════════════════════════════════════════════════════════════
 
-  function buildShareText(pair, diff, gradeName) {
+  function buildShareText(pair, diff, gradeName, hintUsed) {
     const g = GRADES.find(g => g.name === gradeName) || GRADES[GRADES.length - 1];
-    return `🧭 Directional #${pair.puzzleNumber}\n${pair.cityA.name} → ${pair.cityB.name}\n${g.emoji} ${gradeName} (off by ${Math.round(diff)}°)\nPlay: directional.global`;
+    const hintTag = hintUsed ? ' 💡' : '';
+    return `🧭 Directional #${pair.puzzleNumber}\n${pair.cityA.name} → ${pair.cityB.name}\n${g.emoji} ${gradeName} (off by ${Math.round(diff)}°)${hintTag}\nPlay: directional.global`;
   }
 
   function share(text) {
@@ -1246,11 +1247,12 @@
     // Feedback varies each time (random, not day-seeded)
     const feedback = grade.msgs[Math.floor(Math.random() * grade.msgs.length)];
 
+    const hintUsed = !!window._hintUsed;
     saveResult({
       dayIndex: pair.dayIndex, puzzleNum: pair.puzzleNumber,
       cityA: pair.cityA.name, cityB: pair.cityB.name,
       guess: Math.round(guess), correct: Math.round(trueBearing),
-      diff, grade: grade.name
+      diff, grade: grade.name, hintUsed
     });
 
     document.getElementById('r-emoji').textContent    = grade.emoji;
@@ -1265,7 +1267,7 @@
     postScore(pair.dayIndex, grade.name);
     loadCommunityStats(pair.dayIndex, 'result', grade.name);
 
-    const txt = buildShareText(pair, diff, grade.name);
+    const txt = buildShareText(pair, diff, grade.name, hintUsed);
     document.getElementById('btn-r-share').onclick   = () => share(txt);
     document.getElementById('btn-r-history').onclick = () => { renderHistory(); openModal('modal-history'); };
 
@@ -1287,7 +1289,7 @@
       `${g.emoji} ${entry.grade} — ${Math.round(entry.diff)}° off. Come back tomorrow!`;
     drawMap('done-map', pair.cityA, pair.cityB, entry.guess, entry.correct);
     loadCommunityStats(pair.dayIndex, 'done', entry.grade);
-    const txt = buildShareText(pair, entry.diff, entry.grade);
+    const txt = buildShareText(pair, entry.diff, entry.grade, entry.hintUsed);
     document.getElementById('btn-d-share').onclick   = () => share(txt);
     document.getElementById('btn-d-history').onclick = () => { renderHistory(); openModal('modal-history'); };
     setState('done');
@@ -1310,6 +1312,7 @@
 
     document.getElementById('hint-reveal').classList.remove('visible');
     document.getElementById('btn-hint').disabled = false;
+    window._hintUsed = false;
     //JF: Set the needle to 180 rather than 0 at the start
     setNeedle(180);
 
@@ -1381,6 +1384,7 @@
         <p><strong>${p.cityB.name}</strong> is in <strong>${p.cityB.country}</strong>.`;
       el.classList.add('visible');
       document.getElementById('btn-hint').disabled = true;
+      window._hintUsed = true;
     };
 
     document.getElementById('btn-history').onclick = () => { renderHistory(); openModal('modal-history'); };
