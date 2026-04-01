@@ -1146,7 +1146,8 @@
     const g = GRADES.find(g => g.name === gradeName) || GRADES[GRADES.length - 1];
 	//JF: Added lightbulb and "(hint used)
     const hintTag = hintUsed ? '\n 💡 (hint used)' : '';
-    return `🧭 Directional #${pair.puzzleNumber}\n${pair.cityA.name} → ${pair.cityB.name}\n${g.emoji} ${gradeName} (off by ${Math.round(diff)}°)${hintTag}\nPlay: directional.global`;
+    //JF: Made reference to directional.global a link
+	  return `🧭 Directional #${pair.puzzleNumber}\n${pair.cityA.name} → ${pair.cityB.name}\n${g.emoji} ${gradeName} (off by ${Math.round(diff)}°)${hintTag}\nPlay: <a href="directional.global">directional.global</a>`;
   }
 
   function share(text) {
