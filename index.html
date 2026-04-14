@@ -220,6 +220,11 @@
       font-size: 0.9rem; color: var(--text-dim);
       font-style: italic; margin-top: 6px; line-height: 1.5;
     }
+    .grade-streak {
+      font-size: 0.95rem; font-weight: 700; margin-top: 10px;
+      color: var(--accent);
+    }
+    .grade-streak:empty { display: none; }
 
     .stats-row { display: flex; gap: 10px; width: 100%; }
     .stat {
@@ -398,10 +403,11 @@
           You have <strong>one chance</strong>. How good is your sense of direction?
         </div>
         <div class="intro-scoring">
-          <div class="scoring-row"><span class="s-emoji">🖖</span><span class="s-name">Capt. James T. Kirk</span><span class="s-range">&lt; 5°</span></div>
-          <div class="scoring-row"><span class="s-emoji">🌊</span><span class="s-name">Moana</span><span class="s-range">5° – 14°</span></div>
+          <div class="scoring-row"><span class="s-emoji">⚡</span><span class="s-name">Zeus</span><span class="s-range">0°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🖖</span><span class="s-name">Capt. James T. Kirk</span><span class="s-range">1° – 5°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🌊</span><span class="s-name">Moana</span><span class="s-range">6° – 14°</span></div>
           <div class="scoring-row"><span class="s-emoji">🗺️</span><span class="s-name">Dora the Explorer</span><span class="s-range">15° – 24°</span></div>
-          <div class="scoring-row"><span class="s-emoji">☠️</span><span class="s-name">Jack Sparrow</span><span class="s-range">25° – 34°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🏴‍☠️</span><span class="s-name">Jack Sparrow</span><span class="s-range">25° – 34°</span></div>
           <div class="scoring-row"><span class="s-emoji">🏝️</span><span class="s-name">Gilligan</span><span class="s-range">35° – 44°</span></div>
           <div class="scoring-row"><span class="s-emoji">⚓</span><span class="s-name">Odysseus</span><span class="s-range">45° +</span></div>
         </div>
@@ -477,6 +483,7 @@
         <div class="grade-emoji" id="r-emoji">🖖</div>
         <div class="grade-name"  id="r-name">Captain James T. Kirk</div>
         <div class="grade-feedback" id="r-feedback">"Warp speed precision."</div>
+        <div class="grade-streak" id="r-streak"></div>
       </div>
       <div class="stats-row">
         <div class="stat">
@@ -547,10 +554,11 @@
       <div class="modal-section">
         <h3><strong>Scoring</strong></h3>
         <div class="scoring-list">
-          <div class="scoring-row"><span class="s-emoji">🖖</span><span class="s-name">Capt. James T. Kirk</span><span class="s-range">&lt; 5°</span></div>
-          <div class="scoring-row"><span class="s-emoji">🌊</span><span class="s-name">Moana</span><span class="s-range">5° – 14°</span></div>
+          <div class="scoring-row"><span class="s-emoji">⚡</span><span class="s-name">Zeus</span><span class="s-range">0°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🖖</span><span class="s-name">Capt. James T. Kirk</span><span class="s-range">1° – 5°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🌊</span><span class="s-name">Moana</span><span class="s-range">6° – 14°</span></div>
           <div class="scoring-row"><span class="s-emoji">🗺️</span><span class="s-name">Dora the Explorer</span><span class="s-range">15° – 24°</span></div>
-          <div class="scoring-row"><span class="s-emoji">☠️</span><span class="s-name">Jack Sparrow</span><span class="s-range">25° – 34°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🏴‍☠️</span><span class="s-name">Jack Sparrow</span><span class="s-range">25° – 34°</span></div>
           <div class="scoring-row"><span class="s-emoji">🏝️</span><span class="s-name">Gilligan</span><span class="s-range">35° – 44°</span></div>
           <div class="scoring-row"><span class="s-emoji">⚓</span><span class="s-name">Odysseus</span><span class="s-range">45° or more</span></div>
         </div>
@@ -762,6 +770,14 @@
   // ═══════════════════════════════════════════════════════════════
 
   const GRADES = [
+    { name:'Zeus', emoji:'⚡', max:0, msgs:[
+      'Bullseye! Mount Olympus approves.',
+      'Exactly right — the gods themselves couldn\'t do better.',
+      'Perfect aim. Zeus nods in recognition.',
+      'Lightning strikes true. Absolutely perfect.',
+      'The oracle has spoken — and she agrees with you.',
+      'Thunderbolt precision. No mortal compass needed.'
+    ]},
     { name:'Captain James T. Kirk', emoji:'🖖', max:5, msgs:[
       'Space may be the final frontier, but you\'ve clearly mastered this one.',
       'Warp speed precision. Scotty is impressed.',
@@ -770,7 +786,7 @@
       'Boldly going exactly where you needed to go.',
       'Kirk didn\'t guess. Kirk knew.'
     ]},
-    { name:'Moana', emoji:'🌊', max:15, msgs:[
+    { name:'Moana', emoji:'🌊', max:14, msgs:[
       'The ocean called. You mostly heard it.',
       'Close enough that the fish are genuinely impressed.',
       'Te Fiti approves. Mostly.',
@@ -778,7 +794,7 @@
       'Gramma Tala is smiling — with minor geographical caveats.',
       'The ocean chose you. It has reasonable standards.'
     ]},
-    { name:'Dora the Explorer', emoji:'🗺️', max:25, msgs:[
+    { name:'Dora the Explorer', emoji:'🗺️', max:24, msgs:[
       'Can you say "close enough"? ¡Muy bien!',
       'Backpack didn\'t have a better compass.',
       'Map says you\'re in the neighborhood. Loosely.',
@@ -786,7 +802,7 @@
       'You explored! Just... a bit more than necessary.',
       'Boots is giving you a polite golf clap.'
     ]},
-    { name:'Jack Sparrow', emoji:'☠️', max:35, msgs:[
+    { name:'Jack Sparrow', emoji:'🏴‍☠️', max:34, msgs:[
       '"That\'s not — no wait — hmm." Close-ish, mate.',
       'The compass doesn\'t point north. Neither did yours.',
       'You sail boldly, if somewhat sideways.',
@@ -794,7 +810,7 @@
       'Savvy? Mostly savvy.',
       'The Black Pearl has sailed stranger courses. Barely.'
     ]},
-    { name:'Gilligan', emoji:'🏝️', max:45, msgs:[
+    { name:'Gilligan', emoji:'🏝️', max:44, msgs:[
       'Three-hour tour. Went a bit sideways. A lot sideways.',
       'You\'ll be rescued eventually. Probably.',
       'The Skipper has opinions. None of them flattering.',
@@ -813,7 +829,8 @@
   ];
 
   function getGrade(diff) {
-    return GRADES.find(g => diff < g.max) || GRADES[GRADES.length - 1];
+    const d = Math.round(diff);
+    return GRADES.find(g => d <= g.max) || GRADES[GRADES.length - 1];
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -895,6 +912,13 @@
   function getTodaysResult() {
     if (TEST_MODE) return null; // Always allow replay in test mode
     return loadHistory().find(e => e.dayIndex === getDayIndex()) || null;
+  }
+
+  function computeStreak(dayIndex) {
+    const days = new Set(loadHistory().map(e => e.dayIndex));
+    let streak = 0;
+    for (let d = dayIndex; days.has(d); d--) streak++;
+    return streak;
   }
 
   function hasVisited() {
@@ -1255,7 +1279,11 @@
   // ═══════════════════════════════════════════════════════════════
 
   function showResult(pair, guess, trueBearing, diff) {
-    const grade    = getGrade(diff);
+    // Use rounded values so the displayed guess, correct, and off-by always agree.
+    const guessR   = ((Math.round(guess) % 360) + 360) % 360;
+    const correctR = ((Math.round(trueBearing) % 360) + 360) % 360;
+    const diffR    = angularDiff(guessR, correctR);
+    const grade    = getGrade(diffR);
     // Feedback varies each time (random, not day-seeded)
     const feedback = grade.msgs[Math.floor(Math.random() * grade.msgs.length)];
 
@@ -1263,23 +1291,27 @@
     saveResult({
       dayIndex: pair.dayIndex, puzzleNum: pair.puzzleNumber,
       cityA: pair.cityA.name, cityB: pair.cityB.name,
-      guess: Math.round(guess), correct: Math.round(trueBearing),
-      diff, grade: grade.name, hintUsed
+      guess: guessR, correct: correctR,
+      diff: diffR, grade: grade.name, hintUsed
     });
 
     document.getElementById('r-emoji').textContent    = grade.emoji;
     document.getElementById('r-name').textContent     = grade.name;
     document.getElementById('r-feedback').textContent = `"${feedback}"`;
-    document.getElementById('r-guess').textContent    = `${Math.round(guess)}° ${toCardinal(guess)}`;
-    document.getElementById('r-correct').textContent  = `${Math.round(trueBearing)}° ${toCardinal(trueBearing)}`;
-    document.getElementById('r-diff').textContent     = `${Math.round(diff)}°`;
+    document.getElementById('r-guess').textContent    = `${guessR}° ${toCardinal(guessR)}`;
+    document.getElementById('r-correct').textContent  = `${correctR}° ${toCardinal(correctR)}`;
+    document.getElementById('r-diff').textContent     = `${diffR}°`;
 
-    drawMap('result-map', pair.cityA, pair.cityB, guess, trueBearing);
+    const streak = computeStreak(pair.dayIndex);
+    const streakEl = document.getElementById('r-streak');
+    streakEl.textContent = streak > 1 ? `🔥 ${streak}-day streak!` : '';
+
+    drawMap('result-map', pair.cityA, pair.cityB, guessR, correctR);
 
     postScore(pair.dayIndex, grade.name);
     loadCommunityStats(pair.dayIndex, 'result', grade.name);
 
-    const txt = buildShareText(pair, diff, grade.name, hintUsed);
+    const txt = buildShareText(pair, diffR, grade.name, hintUsed);
     document.getElementById('btn-r-share').onclick   = () => share(txt);
     document.getElementById('btn-r-history').onclick = () => { renderHistory(); openModal('modal-history'); };
 
@@ -1297,8 +1329,10 @@
 
   function showDone(entry, pair) {
     const g = GRADES.find(g => g.name === entry.grade) || GRADES[GRADES.length - 1];
+    const streak = computeStreak(pair.dayIndex);
+    const streakTag = streak > 1 ? ` 🔥 ${streak}-day streak!` : '';
     document.getElementById('done-sub').textContent =
-      `${g.emoji} ${entry.grade} — ${Math.round(entry.diff)}° off. Come back tomorrow!`;
+      `${g.emoji} ${entry.grade} — ${Math.round(entry.diff)}° off.${streakTag} Come back tomorrow!`;
     drawMap('done-map', pair.cityA, pair.cityB, entry.guess, entry.correct);
     loadCommunityStats(pair.dayIndex, 'done', entry.grade);
     const txt = buildShareText(pair, entry.diff, entry.grade, entry.hintUsed);
