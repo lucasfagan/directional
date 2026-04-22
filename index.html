@@ -331,6 +331,46 @@
     }
     #toast.show { transform: translateX(-50%) translateY(0); }
 
+    /* ── REVEAL ANIMATIONS ───────────────────────── */
+    @keyframes dir-fade-up  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @keyframes dir-pop-in   { 0% { opacity: 0; transform: scale(0.3); } 70% { transform: scale(1.15); } 100% { opacity: 1; transform: scale(1); } }
+    @keyframes dir-shake    { 0%,100% { transform: translate(0,0); } 10% { transform: translate(-6px,2px); } 20% { transform: translate(5px,-3px); } 30% { transform: translate(-4px,3px); } 40% { transform: translate(4px,-2px); } 50% { transform: translate(-3px,2px); } 60% { transform: translate(3px,-1px); } 70% { transform: translate(-2px,1px); } 80% { transform: translate(2px,0); } 90% { transform: translate(-1px,0); } }
+    @keyframes dir-flash    { 0% { opacity: 0; } 15% { opacity: 0.9; } 100% { opacity: 0; } }
+    @keyframes dir-zeus-pop { 0% { opacity: 0; transform: scale(0.2) rotate(-20deg); } 60% { transform: scale(1.6) rotate(8deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+
+    body[data-state="result"] #r-emoji    { animation: dir-pop-in  520ms cubic-bezier(.34,1.56,.64,1) both; }
+    body[data-state="result"] #r-name     { animation: dir-fade-up 380ms ease-out 250ms both; }
+    body[data-state="result"] #r-feedback { animation: dir-fade-up 380ms ease-out 450ms both; }
+    body[data-state="result"] #r-streak   { animation: dir-fade-up 380ms ease-out 600ms both; }
+    body[data-state="result"] #panel-result .stats-row { animation: dir-fade-up 380ms ease-out 700ms both; }
+    body[data-state="result"] #result-map { animation: dir-fade-up 420ms ease-out 900ms both; }
+    body[data-state="result"] #panel-result .btn-row  { animation: dir-fade-up 380ms ease-out 1100ms both; }
+
+    body[data-tier="zeus"][data-state="result"] #r-emoji      { animation: dir-zeus-pop 900ms cubic-bezier(.34,1.56,.64,1) 300ms both; font-size: 1.2em; }
+    body[data-tier="zeus"][data-state="result"] #panel-result { animation: dir-shake 600ms ease-in-out 350ms both; }
+    body[data-tier="zeus"][data-state="result"] #lightning-overlay { display: block; animation: dir-flash 500ms ease-out 300ms both; }
+
+    #lightning-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: #fff;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body[data-state="result"] #r-emoji,
+      body[data-state="result"] #r-name,
+      body[data-state="result"] #r-feedback,
+      body[data-state="result"] #r-streak,
+      body[data-state="result"] #panel-result .stats-row,
+      body[data-state="result"] #result-map,
+      body[data-state="result"] #panel-result .btn-row,
+      body[data-tier="zeus"][data-state="result"] #r-emoji,
+      body[data-tier="zeus"][data-state="result"] #panel-result { animation: none; }
+      body[data-tier="zeus"][data-state="result"] #lightning-overlay { display: none; }
+    }
+
     /* ── COMMUNITY STATS ────────────────────────── */
     .community-stats {
       width: 100%;
@@ -1295,6 +1335,8 @@
       diff: diffR, grade: grade.name, hintUsed
     });
 
+    document.body.dataset.tier = (grade.name === 'Zeus') ? 'zeus' : 'other';
+
     document.getElementById('r-emoji').textContent    = grade.emoji;
     document.getElementById('r-name').textContent     = grade.name;
     document.getElementById('r-feedback').textContent = `"${feedback}"`;
@@ -1446,5 +1488,6 @@
 
   init();
   </script>
+  <div id="lightning-overlay"></div>
 </body>
 </html>
