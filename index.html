@@ -68,6 +68,10 @@
       font-size: 0.6rem; color: #ff9944; font-weight: 700;
       letter-spacing: 0.1em; text-transform: uppercase;
     }
+    .bday-badge {
+      font-size: 0.6rem; color: #ffb347; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
 
     .header-btns { display: flex; gap: 8px; }
     .icon-btn {
@@ -93,6 +97,7 @@
     body[data-state="playing"] #panel-playing { display: flex; }
     body[data-state="result"]  #panel-result  { display: flex; }
     body[data-state="done"]    #panel-done    { display: flex; }
+    body[data-state="bday-summary"] #panel-bday-summary { display: flex; }
 
     /* ── INTRO PANEL ────────────────────────────── */
     .intro-card {
@@ -402,6 +407,30 @@
       margin-top: 8px;
     }
 
+    /* ── BIRTHDAY SUMMARY ────────────────────────── */
+    .bday-table-wrap {
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; max-height: 360px; overflow-y: auto;
+    }
+    .bday-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .bday-table th, .bday-table td {
+      padding: 7px 10px; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .bday-table tr:last-child td { border-bottom: none; }
+    .bday-table th {
+      font-size: 0.62rem; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim);
+      position: sticky; top: 0; background: var(--surface); z-index: 1;
+    }
+    .bday-table td.rnum { color: var(--text-dim); width: 28px; font-variant-numeric: tabular-nums; }
+    .bday-table td.pair { font-size: 0.78rem; }
+    .bday-table td.pair .pair-a { color: var(--city-a); }
+    .bday-table td.pair .pair-b { color: var(--city-b); }
+    .bday-table td.pair .pair-arrow { color: var(--text-dim); }
+    .bday-table td.grade { text-align: right; white-space: nowrap; font-weight: 600; }
+    .bday-table td.deg { text-align: right; color: var(--text-dim); font-variant-numeric: tabular-nums; width: 50px; }
+
     /* ── RESPONSIVE ──────────────────────────────── */
     @media (max-width: 380px) {
       #target-display { width: 280px; height: 280px; }
@@ -421,6 +450,7 @@
         <div class="logo-name">Directional</div>
         <div class="puzzle-num" id="puzzle-num">#1</div>
         <div class="test-badge" id="test-badge" style="display:none">Test Mode</div>
+        <div class="bday-badge" id="bday-badge" style="display:none">🎂 Birthday Series</div>
       </div>
     </div>
     <div class="header-btns">
@@ -552,6 +582,41 @@
       <button class="btn btn-secondary" id="btn-play-again" style="display:none;width:100%;max-width:340px">Play Again →</button>
     </div>
 
+    <!-- ── BIRTHDAY SUMMARY ── -->
+    <div class="panel" id="panel-bday-summary">
+      <div class="grade-card">
+        <div class="grade-emoji">🎂</div>
+        <div class="grade-name">Birthday Series Complete!</div>
+        <div class="grade-feedback" id="bday-feedback">Happy birthday, Dad!</div>
+      </div>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-label">Total Score</div>
+          <div class="stat-value" id="bday-total-pts">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Avg Off</div>
+          <div class="stat-value" id="bday-avg">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Rounds</div>
+          <div class="stat-value" id="bday-rounds">—</div>
+        </div>
+      </div>
+      <div class="bday-table-wrap">
+        <table class="bday-table">
+          <thead>
+            <tr><th>#</th><th>Pair</th><th style="text-align:right">Grade</th><th style="text-align:right">Off</th></tr>
+          </thead>
+          <tbody id="bday-table-body"></tbody>
+        </table>
+      </div>
+      <div class="btn-row" style="max-width:100%">
+        <button class="btn btn-secondary" id="btn-bday-restart">🔄 Play Again</button>
+        <button class="btn btn-primary" id="btn-bday-share">📋 Share</button>
+      </div>
+    </div>
+
     <!-- ── DONE ── -->
     <div class="panel" id="panel-done">
       <div class="done-card">
@@ -648,6 +713,9 @@
 
   const TEST_MODE = new URLSearchParams(location.search).has('test');
   if (TEST_MODE) document.getElementById('test-badge').style.display = '';
+
+  const BDAY_MODE = new URLSearchParams(location.search).has('bday');
+  if (BDAY_MODE) document.getElementById('bday-badge').style.display = '';
 
   // ═══════════════════════════════════════════════════════════════
   // DATA
@@ -759,6 +827,146 @@
   ];
 
   const CITY_MAP = Object.fromEntries(CITIES.map(c => [c.id, c]));
+
+  // ═══════════════════════════════════════════════════════════════
+  // BIRTHDAY MODE — curated places & pairs (?bday)
+  // Places personal to the family; pairs mix intra-town (close,
+  // tests subtle within-town direction) with cross-category (far).
+  // ═══════════════════════════════════════════════════════════════
+
+  const BDAY_PLACES = [
+    // ── Summit, NJ ──
+    {id:'summit_ymca',  name:'Summit YMCA',      country:'Summit, NJ',       lat:40.7160,  lon:-74.3597},
+    {id:'tulip_90',     name:'90 Tulip St',      country:'Summit, NJ',       lat:40.7064,  lon:-74.3635},
+    {id:'blackburn_14', name:'14 Blackburn Pl',  country:'Summit, NJ',       lat:40.7019,  lon:-74.3697},
+    {id:'oak_knoll',    name:'Oak Knoll School', country:'Summit, NJ',       lat:40.6985,  lon:-74.3728},
+    // ── Morristown, NJ ──
+    {id:'westminster_6',name:'6 Westminster Pl', country:'Morris Twp, NJ',   lat:40.7940,  lon:-74.5040},
+    {id:'mennen',       name:'Mennen Arena',     country:'Morris Twp, NJ',   lat:40.8154,  lon:-74.4753},
+    {id:'footes_pond',  name:"Foote's Pond",     country:'Morristown, NJ',   lat:40.7960,  lon:-74.4870},
+    {id:'beard_school', name:'Morristown Beard', country:'Morristown, NJ',   lat:40.8060,  lon:-74.4555},
+    // ── Kids ──
+    {id:'smu',          name:'SMU',              country:'Dallas, TX',       lat:32.8441,  lon:-96.7849},
+    {id:'duke',         name:'Duke University',  country:'Durham, NC',       lat:36.0014,  lon:-78.9382},
+    {id:'gwu',          name:'GWU',              country:'Washington, DC',   lat:38.8997,  lon:-77.0486},
+    {id:'umd',          name:'U of Maryland',    country:'College Park, MD', lat:38.9874,  lon:-76.9421},
+    {id:'bday_denver',  name:'Denver',           country:'Colorado',         lat:39.7392,  lon:-104.9903},
+    {id:'santa_barbara',name:'Santa Barbara',    country:'California',       lat:34.4208,  lon:-119.6982},
+    {id:'bday_london',  name:'London',           country:'United Kingdom',   lat:51.5074,  lon:-0.1278},
+    {id:'hyattsville',  name:'Hyattsville',      country:'Maryland',         lat:38.9559,  lon:-76.9455},
+    {id:'pasadena',     name:'Pasadena',         country:'California',       lat:34.1478,  lon:-118.1445},
+    // ── Other ──
+    {id:'magnolia_33',  name:'33 Magnolia Ave',  country:'Denville, NJ',     lat:40.8860,  lon:-74.4760},
+    {id:'nicole_94',    name:'94 Nicole Ct',     country:'Lakewood, NJ',     lat:40.0830,  lon:-74.2260},
+    {id:'oak_view',     name:'Oak View',         country:'California',       lat:34.4000,  lon:-119.3001},
+    {id:'georgetown_tx',name:'Georgetown',       country:'Texas',            lat:30.6327,  lon:-97.6772},
+    {id:'perry_44',     name:'44 Perry St',      country:'New York, NY',     lat:40.7353,  lon:-74.0038},
+    {id:'freeport',     name:'Freeport',         country:'Long Island, NY',  lat:40.6576,  lon:-73.5832},
+    {id:'lukore',       name:'Lukore',           country:'Matuga, Kenya',    lat:-4.3525,  lon:39.3149},
+  ];
+
+  const BDAY_PLACE_MAP = Object.fromEntries(BDAY_PLACES.map(p => [p.id, p]));
+
+  // 50 pairs: 12 intra-town (close — tests subtle direction) + 38 cross-category (far)
+  const BDAY_PAIRS = [
+    // ── Intra-Summit (6 close) ──
+    ['summit_ymca', 'oak_knoll'],
+    ['tulip_90',    'blackburn_14'],
+    ['summit_ymca', 'tulip_90'],
+    ['oak_knoll',   'blackburn_14'],
+    ['summit_ymca', 'blackburn_14'],
+    ['tulip_90',    'oak_knoll'],
+    // ── Intra-Morristown (6 close) ──
+    ['mennen',       'footes_pond'],
+    ['mennen',       'beard_school'],
+    ['mennen',       'westminster_6'],
+    ['footes_pond',  'beard_school'],
+    ['footes_pond',  'westminster_6'],
+    ['beard_school', 'westminster_6'],
+    // ── Summit → Kids ──
+    ['summit_ymca',  'smu'],
+    ['tulip_90',     'duke'],
+    ['oak_knoll',    'gwu'],
+    ['blackburn_14', 'umd'],
+    ['summit_ymca',  'bday_denver'],
+    ['oak_knoll',    'santa_barbara'],
+    ['blackburn_14', 'bday_london'],
+    ['tulip_90',     'pasadena'],
+    // ── Morristown → Kids ──
+    ['mennen',         'smu'],
+    ['footes_pond',    'duke'],
+    ['beard_school',   'gwu'],
+    ['westminster_6',  'umd'],
+    ['mennen',         'bday_denver'],
+    ['footes_pond',    'santa_barbara'],
+    ['beard_school',   'bday_london'],
+    ['westminster_6',  'hyattsville'],
+    // ── NJ ↔ Other ──
+    ['summit_ymca',  'perry_44'],
+    ['oak_knoll',    'freeport'],
+    ['blackburn_14', 'magnolia_33'],
+    ['tulip_90',     'nicole_94'],
+    ['mennen',       'magnolia_33'],
+    ['beard_school', 'perry_44'],
+    ['westminster_6','freeport'],
+    ['footes_pond',  'nicole_94'],
+    // ── Geography surprises (kids ↔ other) ──
+    ['smu',          'georgetown_tx'],
+    ['duke',         'perry_44'],
+    ['umd',          'hyattsville'],
+    ['pasadena',     'oak_view'],
+    ['santa_barbara','oak_view'],
+    ['bday_london',  'perry_44'],
+    ['duke',         'umd'],
+    ['smu',          'pasadena'],
+    ['bday_london',  'bday_denver'],
+    ['umd',          'santa_barbara'],
+    // ── Other ↔ Other / Cross-region ──
+    ['perry_44',     'freeport'],
+    ['magnolia_33',  'nicole_94'],
+    ['georgetown_tx','smu'],
+    ['hyattsville',  'oak_view'],
+    // ── Lukore, Kenya (long-distance to the family hubs) ──
+    ['summit_ymca',  'lukore'],
+    ['mennen',       'lukore'],
+    ['bday_london',  'lukore'],
+  ];
+
+  // Shuffle once with a fixed seed so order is the same for everyone
+  // but doesn't run Summit-Summit-Summit... → Morristown-Morristown... → far pairs.
+  (function shuffleBdayPairs() {
+    const rng = mulberry32(20260517);
+    for (let i = BDAY_PAIRS.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [BDAY_PAIRS[i], BDAY_PAIRS[j]] = [BDAY_PAIRS[j], BDAY_PAIRS[i]];
+    }
+  })();
+
+  const BDAY_POINTS = {
+    'Zeus': 100,
+    'Captain James T. Kirk': 80,
+    'Moana': 60,
+    'Dora the Explorer': 40,
+    'Jack Sparrow': 25,
+    'Gilligan': 10,
+    'Odysseus': 5,
+  };
+
+  // Mutable per-session state — reset on page load (no localStorage in bday mode).
+  const bdayState = { round: 0, results: [] };
+
+  function bdayCurrentPair() {
+    const [idA, idB] = BDAY_PAIRS[bdayState.round];
+    return {
+      cityA: BDAY_PLACE_MAP[idA],
+      cityB: BDAY_PLACE_MAP[idB],
+      puzzleNumber: bdayState.round + 1,
+      // dayIndex is required by save/share paths; use a negative sentinel
+      // so it can't collide with anything in stored history.
+      dayIndex: -(bdayState.round + 1),
+      bday: true,
+    };
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // ALGORITHMIC PAIR GENERATION (10+ years of unique pairs)
@@ -940,7 +1148,7 @@
   }
 
   function saveResult(entry) {
-    if (TEST_MODE) return; // Don't save test mode results
+    if (TEST_MODE || BDAY_MODE) return; // Don't save test/bday results
     try {
       const h = loadHistory();
       const i = h.findIndex(e => e.dayIndex === entry.dayIndex);
@@ -950,7 +1158,7 @@
   }
 
   function getTodaysResult() {
-    if (TEST_MODE) return null; // Always allow replay in test mode
+    if (TEST_MODE || BDAY_MODE) return null; // Always allow replay
     return loadHistory().find(e => e.dayIndex === getDayIndex()) || null;
   }
 
@@ -1037,6 +1245,7 @@
   // ═══════════════════════════════════════════════════════════════
 
   let _worldData = null;
+  let _usAtlas = null;
 
   async function getWorldData() {
     if (_worldData) return _worldData;
@@ -1045,34 +1254,55 @@
     return _worldData;
   }
 
+  async function getUsAtlas() {
+    if (_usAtlas) return _usAtlas;
+    const r = await fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json');
+    _usAtlas = await r.json();
+    return _usAtlas;
+  }
+
+  // Pairs closer than this auto-zoom to fit; far pairs keep the fixed world scale.
+  const ZOOM_KM = 100;
+
   async function drawMap(containerId, cityA, cityB, guessBearing, trueBearing) {
     const container = document.getElementById(containerId);
     if (!container) return;
     container.innerHTML = '<div style="height:180px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:0.8rem">Loading map…</div>';
 
-    let topo;
-    try { topo = await getWorldData(); }
-    catch {
+    const W = Math.max(container.clientWidth || 0, 300);
+    const H = Math.round(W * 0.52);
+
+    const isClose = haversineKm(cityA, cityB) < ZOOM_KM;
+
+    let landFeatures, borderMesh, proj;
+    try {
+      if (isClose) {
+        // Close pair → US counties + auto-fit zoom
+        const atlas = await getUsAtlas();
+        landFeatures = topojson.feature(atlas, atlas.objects.counties);
+        borderMesh   = topojson.mesh(atlas, atlas.objects.states, (a, b) => a !== b);
+        // fitExtent auto-computes scale & translate so the two points fit with padding.
+        const pair = { type: 'MultiPoint', coordinates: [[cityA.lon, cityA.lat], [cityB.lon, cityB.lat]] };
+        proj = d3.geoMercator().fitExtent([[40, 40], [W - 40, H - 40]], pair);
+      } else {
+        // Far pair → world map at fixed scale, centered on midpoint (existing behavior)
+        const topo = await getWorldData();
+        landFeatures = topojson.feature(topo, topo.objects.countries);
+        borderMesh   = topojson.mesh(topo, topo.objects.countries, (a, b) => a !== b);
+        let dLon = cityB.lon - cityA.lon;
+        if (dLon > 180) dLon -= 360;
+        if (dLon < -180) dLon += 360;
+        let midLon = cityA.lon + dLon / 2;
+        if (midLon > 180) midLon -= 360;
+        if (midLon < -180) midLon += 360;
+        const midLat = (cityA.lat + cityB.lat) / 2;
+        proj = d3.geoMercator().rotate([-midLon, 0]).center([0, midLat]).scale(W / 6.4).translate([W / 2, H / 2]);
+      }
+    } catch {
       container.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim);font-size:0.8rem">Map unavailable offline.</div>';
       return;
     }
 
-    const W = Math.max(container.clientWidth || 0, 300);
-    const H = Math.round(W * 0.52);
-
-    const countries = topojson.feature(topo, topo.objects.countries);
-    const borders   = topojson.mesh(topo, topo.objects.countries, (a, b) => a !== b);
-
-    // Center map on midpoint between the two cities
-    let dLon = cityB.lon - cityA.lon;
-    if (dLon > 180) dLon -= 360;
-    if (dLon < -180) dLon += 360;
-    let midLon = cityA.lon + dLon / 2;
-    if (midLon > 180) midLon -= 360;
-    if (midLon < -180) midLon += 360;
-    const midLat = (cityA.lat + cityB.lat) / 2;
-
-    const proj = d3.geoMercator().rotate([-midLon, 0]).center([0, midLat]).scale(W / 6.4).translate([W / 2, H / 2]);
     const path = d3.geoPath().projection(proj);
 
     const svg = d3.create('svg').attr('viewBox', `0 0 ${W} ${H}`);
@@ -1084,10 +1314,10 @@
 
     const mapG = svg.append('g').attr('clip-path', `url(#clip-${containerId})`);
 
-    mapG.append('g').selectAll('path').data(countries.features).join('path')
+    mapG.append('g').selectAll('path').data(landFeatures.features).join('path')
       .attr('d', path).attr('fill', '#152032').attr('stroke', 'none');
 
-    mapG.append('path').datum(borders).attr('d', path)
+    mapG.append('path').datum(borderMesh).attr('d', path)
       .attr('fill', 'none').attr('stroke', '#243352').attr('stroke-width', '0.6');
 
     // City positions on projection
@@ -1122,14 +1352,14 @@
       const pt = proj([lon, lat]);
       if (!pt) return;
       const [px, py] = pt;
-      mapG.append('circle').attr('cx', px).attr('cy', py).attr('r', 6)
-        .attr('fill', color).attr('stroke', '#060e1c').attr('stroke-width', 1.5);
-      const flipLeft = px > W - 85;
+      mapG.append('circle').attr('cx', px).attr('cy', py).attr('r', 4)
+        .attr('fill', color).attr('stroke', '#060e1c').attr('stroke-width', 1.2);
+      const flipLeft = px > W - 70;
       mapG.append('text')
-        .attr('x', px + (flipLeft ? -10 : 10)).attr('y', py + 4)
+        .attr('x', px + (flipLeft ? -7 : 7)).attr('y', py + 3)
         .attr('text-anchor', flipLeft ? 'end' : 'start')
-        .attr('fill', '#e2e8f8').attr('font-size', '11').attr('font-weight', '700')
-        .attr('paint-order', 'stroke').attr('stroke', '#060e1c').attr('stroke-width', '3')
+        .attr('fill', '#e2e8f8').attr('font-size', '8.5').attr('font-weight', '600')
+        .attr('paint-order', 'stroke').attr('stroke', '#060e1c').attr('stroke-width', '2.2')
         .text(label);
     }
     //JF: Added START and END
@@ -1218,6 +1448,9 @@
 
   function buildShareText(pair, diff, gradeName, hintUsed) {
     const g = GRADES.find(g => g.name === gradeName) || GRADES[GRADES.length - 1];
+    if (pair.bday) {
+      return `🧭 Birthday Round ${pair.puzzleNumber}/${BDAY_PAIRS.length}\n${pair.cityA.name} → ${pair.cityB.name}\n${g.emoji} ${gradeName} (off by ${Math.round(diff)}°)`;
+    }
 	//JF: Added lightbulb and "(hint used)
     const hintTag = hintUsed ? '\n 💡 (hint used)' : '';
     //JF: Made reference to directional.global a link
@@ -1259,7 +1492,7 @@
   }
 
   function postScore(dayIndex, gradeName) {
-    if (!SUPABASE_URL || TEST_MODE || hasPostedScore(dayIndex)) return;
+    if (!SUPABASE_URL || TEST_MODE || BDAY_MODE || hasPostedScore(dayIndex)) return;
     fetch(`${SUPABASE_URL}/rest/v1/scores`, {
       method: 'POST',
       headers: {
@@ -1291,7 +1524,7 @@
   }
 
   async function loadCommunityStats(dayIndex, suffix, playerGrade) {
-    if (!SUPABASE_URL) return;
+    if (!SUPABASE_URL || BDAY_MODE) return;
     const wrapper = document.getElementById(`community-stats-${suffix}`);
     const chartEl = document.getElementById(`community-chart-${suffix}`);
     const totalEl = document.getElementById(`community-total-${suffix}`);
@@ -1312,6 +1545,93 @@
     } catch {
       wrapper.style.display = 'none';
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BIRTHDAY FLOW
+  // ═══════════════════════════════════════════════════════════════
+
+  function bdaySetHeader() {
+    document.getElementById('puzzle-num').textContent =
+      `Round ${bdayState.round + 1} / ${BDAY_PAIRS.length}`;
+  }
+
+  function bdayStartRound() {
+    const pair = bdayCurrentPair();
+    window._pair = pair;
+    bdaySetHeader();
+    document.getElementById('target-name').textContent = pair.cityB.name.toUpperCase();
+    document.getElementById('from-name').textContent   = pair.cityA.name;
+    document.getElementById('hint-reveal').classList.remove('visible');
+    document.getElementById('btn-hint').disabled = false;
+    window._hintUsed = false;
+    setNeedle(180);
+    setState('playing');
+  }
+
+  function bdayNextRound() {
+    bdayState.round++;
+    bdayStartRound();
+  }
+
+  function bdayBuildShareText() {
+    const totalPts = bdayState.results.reduce((s, r) => s + (BDAY_POINTS[r.grade] || 0), 0);
+    const totalDeg = bdayState.results.reduce((s, r) => s + r.diff, 0);
+    const avgDeg = bdayState.results.length ? (totalDeg / bdayState.results.length) : 0;
+    // 10 emojis per line, like Wordle share format
+    const emojis = bdayState.results.map(r => {
+      const g = GRADES.find(g => g.name === r.grade) || GRADES[GRADES.length - 1];
+      return g.emoji;
+    });
+    const lines = [];
+    for (let i = 0; i < emojis.length; i += 10) {
+      lines.push(emojis.slice(i, i + 10).join(''));
+    }
+    return `🧭 Directional Birthday Series\n🏆 ${totalPts} pts • Avg ${avgDeg.toFixed(1)}° off (${bdayState.results.length} rounds)\n\n${lines.join('\n')}`;
+  }
+
+  function bdayShowSummary() {
+    const results = bdayState.results;
+    const totalPts = results.reduce((s, r) => s + (BDAY_POINTS[r.grade] || 0), 0);
+    const totalDeg = results.reduce((s, r) => s + r.diff, 0);
+    const avgDeg = results.length ? (totalDeg / results.length) : 0;
+
+    document.getElementById('bday-total-pts').textContent = totalPts.toLocaleString();
+    document.getElementById('bday-avg').textContent       = `${avgDeg.toFixed(1)}°`;
+    document.getElementById('bday-rounds').textContent    = `${results.length}/${BDAY_PAIRS.length}`;
+
+    // Feedback line varies with performance
+    const avg = avgDeg;
+    let msg;
+    if (avg < 8)       msg = 'Olympus-level navigation. Dad would be proud.';
+    else if (avg < 16) msg = 'Sharp compass sense. Beat that, family!';
+    else if (avg < 25) msg = 'Solid run. Plenty of fight left in you.';
+    else if (avg < 35) msg = 'You took the scenic route. Memorable.';
+    else               msg = 'An Odyssey of a series. The story will be told.';
+    document.getElementById('bday-feedback').textContent = msg;
+
+    const tbody = document.getElementById('bday-table-body');
+    tbody.innerHTML = '';
+    results.forEach(r => {
+      const g = GRADES.find(g => g.name === r.grade) || GRADES[GRADES.length - 1];
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="rnum">${r.round}</td>
+        <td class="pair"><span class="pair-a">${r.cityA}</span> <span class="pair-arrow">→</span> <span class="pair-b">${r.cityB}</span></td>
+        <td class="grade">${g.emoji} ${r.grade}</td>
+        <td class="deg">${Math.round(r.diff)}°</td>`;
+      tbody.appendChild(tr);
+    });
+
+    const shareTxt = bdayBuildShareText();
+    document.getElementById('btn-bday-share').onclick = () => share(shareTxt);
+    document.getElementById('btn-bday-restart').onclick = () => {
+      bdayState.round = 0;
+      bdayState.results = [];
+      bdayStartRound();
+    };
+
+    setState('bday-summary');
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -1357,10 +1677,24 @@
     document.getElementById('btn-r-share').onclick   = () => share(txt);
     document.getElementById('btn-r-history').onclick = () => { renderHistory(); openModal('modal-history'); };
 
-    // Test mode: show play-again button
+    // Test mode: show play-again button. Bday mode: show next-round button.
     const playAgainBtn = document.getElementById('btn-play-again');
-    if (TEST_MODE) {
+    if (BDAY_MODE) {
+      bdayState.results.push({
+        round: pair.puzzleNumber,
+        cityA: pair.cityA.name, cityB: pair.cityB.name,
+        guess: guessR, correct: correctR, diff: diffR, grade: grade.name,
+      });
+      const isLast = bdayState.round >= BDAY_PAIRS.length - 1;
       playAgainBtn.style.display = '';
+      playAgainBtn.textContent = isLast
+        ? 'View Summary →'
+        : `Next Round (${bdayState.round + 2}/${BDAY_PAIRS.length}) →`;
+      playAgainBtn.onclick = isLast ? bdayShowSummary : bdayNextRound;
+      document.getElementById('btn-r-history').style.display = 'none';
+    } else if (TEST_MODE) {
+      playAgainBtn.style.display = '';
+      playAgainBtn.textContent = 'Play Again →';
       playAgainBtn.onclick = () => startNewGame();
     } else {
       playAgainBtn.style.display = 'none';
@@ -1417,10 +1751,16 @@
   // ═══════════════════════════════════════════════════════════════
 
   function init() {
-    const pair = TEST_MODE ? getRandomPair() : getTodaysPair();
+    const pair = BDAY_MODE ? bdayCurrentPair()
+              : TEST_MODE ? getRandomPair()
+              : getTodaysPair();
     window._pair = pair;
 
-    document.getElementById('puzzle-num').textContent = `#${pair.puzzleNumber}`;
+    if (BDAY_MODE) {
+      bdaySetHeader();
+    } else {
+      document.getElementById('puzzle-num').textContent = `#${pair.puzzleNumber}`;
+    }
     document.getElementById('target-name').textContent = pair.cityB.name.toUpperCase();
     document.getElementById('from-name').textContent   = pair.cityA.name;
 
@@ -1428,18 +1768,18 @@
     //JF: Set the needle to 180 rather than 0 at the start
     setNeedle(180);
 
-    // Already played today? (skipped in test mode)
+    // Already played today? (skipped in test/bday mode)
     const prev = getTodaysResult();
     if (prev) { showDone(prev, pair); return; }
 
-    // First-time intro screen
-    if (!hasVisited() && !TEST_MODE) {
+    // First-time intro screen (skipped in test/bday mode)
+    if (!hasVisited() && !TEST_MODE && !BDAY_MODE) {
       setState('intro');
       document.getElementById('btn-intro-start').onclick = () => {
         markVisited();
         setState('idle');
       };
-    } else if (TEST_MODE) {
+    } else if (TEST_MODE || BDAY_MODE) {
       setState('playing');
     } else {
       setState('idle');
