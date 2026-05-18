@@ -835,16 +835,16 @@
   // ═══════════════════════════════════════════════════════════════
 
   const BDAY_PLACES = [
-    // ── Summit, NJ ──
-    {id:'summit_ymca',  name:'Summit YMCA',      country:'Summit, NJ',       lat:40.7160,  lon:-74.3597},
-    {id:'tulip_90',     name:'90 Tulip St',      country:'Summit, NJ',       lat:40.7064,  lon:-74.3635},
-    {id:'blackburn_14', name:'14 Blackburn Pl',  country:'Summit, NJ',       lat:40.7019,  lon:-74.3697},
-    {id:'oak_knoll',    name:'Oak Knoll School', country:'Summit, NJ',       lat:40.6985,  lon:-74.3728},
+    // ── Summit, NJ ──  (town/area used as display name for cross-town pairs)
+    {id:'summit_ymca',  name:'Summit YMCA',      country:'Summit, NJ',       lat:40.7160,  lon:-74.3597, town:'Summit, NJ',     area:'New Jersey'},
+    {id:'tulip_90',     name:'90 Tulip St',      country:'Summit, NJ',       lat:40.7064,  lon:-74.3635, town:'Summit, NJ',     area:'New Jersey'},
+    {id:'blackburn_14', name:'14 Blackburn Pl',  country:'Summit, NJ',       lat:40.7019,  lon:-74.3697, town:'Summit, NJ',     area:'New Jersey'},
+    {id:'oak_knoll',    name:'Oak Knoll School', country:'Summit, NJ',       lat:40.6985,  lon:-74.3728, town:'Summit, NJ',     area:'New Jersey'},
     // ── Morristown, NJ ──
-    {id:'westminster_6',name:'6 Westminster Pl', country:'Morris Twp, NJ',   lat:40.7940,  lon:-74.5040},
-    {id:'mennen',       name:'Mennen Arena',     country:'Morris Twp, NJ',   lat:40.8154,  lon:-74.4753},
-    {id:'footes_pond',  name:"Foote's Pond",     country:'Morristown, NJ',   lat:40.7960,  lon:-74.4870},
-    {id:'beard_school', name:'Morristown Beard', country:'Morristown, NJ',   lat:40.8060,  lon:-74.4555},
+    {id:'westminster_6',name:'6 Westminster Pl', country:'Morris Twp, NJ',   lat:40.7940,  lon:-74.5040, town:'Morristown, NJ', area:'New Jersey'},
+    {id:'mennen',       name:'Mennen Arena',     country:'Morris Twp, NJ',   lat:40.8154,  lon:-74.4753, town:'Morristown, NJ', area:'New Jersey'},
+    {id:'footes_pond',  name:"Foote's Pond",     country:'Morristown, NJ',   lat:40.7960,  lon:-74.4870, town:'Morristown, NJ', area:'New Jersey'},
+    {id:'beard_school', name:'Morristown Beard', country:'Morristown, NJ',   lat:40.8060,  lon:-74.4555, town:'Morristown, NJ', area:'New Jersey'},
     // ── Kids ──
     {id:'smu',          name:'SMU',              country:'Dallas, TX',       lat:32.8441,  lon:-96.7849},
     {id:'duke',         name:'Duke University',  country:'Durham, NC',       lat:36.0014,  lon:-78.9382},
@@ -856,11 +856,11 @@
     {id:'hyattsville',  name:'Hyattsville',      country:'Maryland',         lat:38.9559,  lon:-76.9455},
     {id:'pasadena',     name:'Pasadena',         country:'California',       lat:34.1478,  lon:-118.1445},
     // ── Other ──
-    {id:'magnolia_33',  name:'33 Magnolia Ave',  country:'Denville, NJ',     lat:40.8860,  lon:-74.4760},
-    {id:'nicole_94',    name:'94 Nicole Ct',     country:'Lakewood, NJ',     lat:40.0830,  lon:-74.2260},
+    {id:'magnolia_33',  name:'33 Magnolia Ave',  country:'Denville, NJ',     lat:40.8860,  lon:-74.4760, town:'Denville, NJ',   area:'New Jersey'},
+    {id:'nicole_94',    name:'94 Nicole Ct',     country:'Lakewood, NJ',     lat:40.0830,  lon:-74.2260, town:'Lakewood, NJ',   area:'New Jersey'},
     {id:'oak_view',     name:'Oak View',         country:'California',       lat:34.4000,  lon:-119.3001},
     {id:'georgetown_tx',name:'Georgetown',       country:'Texas',            lat:30.6327,  lon:-97.6772},
-    {id:'perry_44',     name:'44 Perry St',      country:'New York, NY',     lat:40.7353,  lon:-74.0038},
+    {id:'perry_44',     name:'44 Perry St',      country:'New York, NY',     lat:40.7353,  lon:-74.0038, town:'New York, NY',   area:'New York'},
     {id:'freeport',     name:'Freeport',         country:'Long Island, NY',  lat:40.6576,  lon:-73.5832},
     {id:'lukore',       name:'Lukore',           country:'Matuga, Kenya',    lat:-4.3525,  lon:39.3149},
   ];
@@ -957,9 +957,19 @@
 
   function bdayCurrentPair() {
     const [idA, idB] = BDAY_PAIRS[bdayState.round];
+    const a = BDAY_PLACE_MAP[idA];
+    const b = BDAY_PLACE_MAP[idB];
+    // Intra-town pairs (e.g. Summit→Summit) need precise addresses for the
+    // sub-town direction test. Cross-town pairs read better with just the town
+    // name — the bearing doesn't meaningfully change at that distance.
+    const isIntraTown = a.town && b.town && a.town === b.town;
+    function asDisplay(p) {
+      if (isIntraTown || !p.town) return p;
+      return { ...p, name: p.town, country: p.area || p.country };
+    }
     return {
-      cityA: BDAY_PLACE_MAP[idA],
-      cityB: BDAY_PLACE_MAP[idB],
+      cityA: asDisplay(a),
+      cityB: asDisplay(b),
       puzzleNumber: bdayState.round + 1,
       // dayIndex is required by save/share paths; use a negative sentinel
       // so it can't collide with anything in stored history.
