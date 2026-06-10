@@ -1,0 +1,1871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Directional USA</title>
+  <meta name="description" content="The US edition of Directional — a daily compass bearing game. Set your heading from one American city to another — how close can you get?">
+  <meta property="og:title" content="Directional USA">
+  <meta property="og:description" content="The US edition of Directional — a daily compass bearing game. Set your heading from one American city to another — how close can you get?">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://directional.global/us">
+  <meta property="og:image" content="https://directional.global/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Directional USA">
+  <meta name="twitter:description" content="The US edition of Directional — a daily compass bearing game. Set your heading from one American city to another — how close can you get?">
+  <meta name="twitter:image" content="https://directional.global/og-image.png">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+  <style>
+    :root {
+      --bg: #080d1c;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --border: #263054;
+      --accent: #4f9cff;
+      --city-a: #4cdf8a;
+      --city-b: #ff6b6b;
+      --text: #e2e8f8;
+      --text-dim: #6b7aa0;
+      --needle-n: #ff4444;
+      --needle-s: #3d4870;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* ── HEADER ──────────────────────────────────── */
+    header {
+      width: 100%;
+      max-width: 560px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-compass { font-size: 1.8rem; line-height: 1; }
+    .logo-text { display: flex; flex-direction: column; }
+    .logo-name {
+      font-size: 1.1rem; font-weight: 800;
+      letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .puzzle-num { font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.08em; }
+    .test-badge {
+      font-size: 0.6rem; color: #ff9944; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .bday-badge {
+      font-size: 0.6rem; color: #ffb347; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .us-badge {
+      font-size: 0.6rem; color: #7fb2ff; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+
+    .header-btns { display: flex; gap: 8px; }
+    .icon-btn {
+      width: 36px; height: 36px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px; cursor: pointer;
+      font-size: 1rem; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s; text-decoration: none;
+    }
+    .icon-btn:hover { background: var(--border); }
+
+    /* ── MAIN ────────────────────────────────────── */
+    main {
+      width: 100%; max-width: 560px; flex: 1;
+      padding: 16px; display: flex; flex-direction: column;
+      align-items: center; gap: 14px;
+    }
+
+    /* ── STATE MACHINE ───────────────────────────── */
+    .panel { display: none; width: 100%; flex-direction: column; align-items: center; gap: 14px; }
+    body[data-state="intro"]   #panel-intro   { display: flex; }
+    body[data-state="idle"]    #panel-idle    { display: flex; }
+    body[data-state="playing"] #panel-playing { display: flex; }
+    body[data-state="result"]  #panel-result  { display: flex; }
+    body[data-state="done"]    #panel-done    { display: flex; }
+    body[data-state="bday-summary"] #panel-bday-summary { display: flex; }
+
+    /* ── INTRO PANEL ────────────────────────────── */
+    .intro-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px 22px; text-align: center; width: 100%;
+    }
+    .intro-logo { font-size: 3.5rem; margin-bottom: 8px; }
+    .intro-title {
+      font-size: 1.6rem; font-weight: 800;
+      letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 16px;
+    }
+    .intro-desc {
+      font-size: 0.92rem; color: var(--text-dim); line-height: 1.7; margin-bottom: 20px;
+    }
+    .intro-desc strong { color: var(--text); }
+    .intro-scoring {
+      display: flex; flex-direction: column; gap: 5px;
+      margin-bottom: 20px; text-align: left;
+    }
+    .intro-scoring .scoring-row { font-size: 0.82rem; }
+
+    /* ── IDLE PANEL ──────────────────────────────── */
+    .idle-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px 20px; text-align: center; width: 100%;
+    }
+    .idle-label {
+      font-size: 0.72rem; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 14px;
+    }
+    .city-pair {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .city-chip {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 14px; font-size: 1.1rem; font-weight: 700;
+    }
+    .city-chip.a { border-color: var(--city-a); color: var(--city-a); }
+    .city-chip.b { border-color: var(--city-b); color: var(--city-b); }
+    .city-arrow { font-size: 1.2rem; color: var(--text-dim); }
+    .idle-desc { font-size: 0.88rem; color: var(--text-dim); line-height: 1.6; }
+    .idle-desc strong { color: var(--text); }
+
+    /* ── BUTTONS ─────────────────────────────────── */
+    .btn {
+      border-radius: 10px; font-size: 0.92rem; font-weight: 600;
+      cursor: pointer; padding: 12px 20px; border: 1px solid transparent;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .btn:active:not(:disabled) { transform: translateY(0); }
+    .btn:disabled { opacity: 0.45; cursor: default; }
+    .btn-primary  { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border-color: var(--border); }
+    .btn-lg { padding: 14px 36px; font-size: 1rem; border-radius: 12px; }
+    .btn-row { display: flex; gap: 10px; width: 100%; max-width: 340px; }
+    .btn-row .btn { flex: 1; text-align: center; }
+
+    /* ── PLAYING PANEL ───────────────────────────── */
+    #target-display {
+      position: relative;
+      width: 320px; height: 320px;
+      display: flex; align-items: center; justify-content: center;
+      overflow: visible;
+    }
+
+    #target-label {
+      position: absolute;
+      pointer-events: none;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      z-index: 10;
+      transform: translate(-50%, -50%);
+    }
+    .target-dot {
+      width: 10px; height: 10px;
+      background: var(--city-b); border-radius: 50%;
+      border: 2px solid #fff; box-shadow: 0 0 8px var(--city-b);
+    }
+    .target-name {
+      background: var(--surface2); border: 1px solid var(--city-b);
+      color: var(--city-b); font-size: 0.68rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+      letter-spacing: 0.07em; text-transform: uppercase;
+    }
+
+    #compass-wrap { position: relative; width: 240px; height: 240px; }
+    #compass-svg {
+      width: 100%; height: 100%;
+      touch-action: none; cursor: grab;
+      user-select: none; -webkit-user-select: none;
+    }
+    #compass-svg:active { cursor: grabbing; }
+
+    .from-label { text-align: center; }
+    .from-tag {
+      font-size: 0.68rem; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 2px;
+    }
+    .from-name { font-size: 1.15rem; font-weight: 700; color: var(--city-a); }
+
+    .bearing-display { display: flex; align-items: baseline; gap: 6px; }
+    .bearing-deg {
+      font-size: 2rem; font-weight: 800;
+      letter-spacing: 0.04em; font-variant-numeric: tabular-nums;
+    }
+    .bearing-card { font-size: 1rem; color: var(--text-dim); font-weight: 500; }
+
+    #hint-reveal {
+      display: none; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 16px; font-size: 0.875rem;
+      color: var(--text-dim); text-align: center; width: 100%; max-width: 340px;
+    }
+    #hint-reveal.visible { display: block; }
+    #hint-reveal strong { color: var(--text); }
+
+    /* ── RESULT PANEL ────────────────────────────── */
+    .grade-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px; text-align: center; width: 100%;
+    }
+    .grade-emoji { font-size: 2.8rem; margin-bottom: 4px; }
+    .grade-name  { font-size: 1.7rem; font-weight: 800; }
+    .grade-feedback {
+      font-size: 0.9rem; color: var(--text-dim);
+      font-style: italic; margin-top: 6px; line-height: 1.5;
+    }
+    .grade-streak {
+      font-size: 0.95rem; font-weight: 700; margin-top: 10px;
+      color: var(--accent);
+    }
+    .grade-streak:empty { display: none; }
+
+    .stats-row { display: flex; gap: 10px; width: 100%; }
+    .stat {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 8px; text-align: center;
+    }
+    .stat-label {
+      font-size: 0.65rem; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 4px;
+    }
+    .stat-value { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    #result-map, #done-map {
+      width: 100%; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border); background: #060d1a; min-height: 180px;
+    }
+    #result-map svg, #done-map svg { display: block; width: 100%; height: auto; }
+
+    /* ── DONE PANEL ──────────────────────────────── */
+    .done-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px; text-align: center; width: 100%;
+    }
+    .done-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 6px; }
+    .done-sub   { font-size: 0.88rem; color: var(--text-dim); }
+
+    /* ── MODALS ──────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100; padding: 16px; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 22px; max-width: 420px; width: 100%;
+      max-height: 85vh; overflow-y: auto;
+    }
+    .modal-hdr {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 16px;
+    }
+    .modal-title { font-size: 1.15rem; font-weight: 700; }
+    .modal-close {
+      background: none; border: none; color: var(--text-dim);
+      font-size: 1.2rem; cursor: pointer; padding: 4px 8px;
+    }
+    .modal-section { margin-bottom: 18px; }
+    .modal-section h3 {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); margin-bottom: 10px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-section p { font-size: 0.875rem; color: var(--text-dim); line-height: 1.65; }
+    .modal-section p + p { margin-top: 8px; }
+    .modal-section strong { color: var(--text); }
+
+    .scoring-list { display: flex; flex-direction: column; gap: 6px; }
+    .scoring-row {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface2); border-radius: 8px;
+      padding: 8px 10px; font-size: 0.875rem;
+    }
+    //JF: Realigned emoji from center to right and extended the width from 20px to 40px
+    .s-emoji { font-size: 1.1rem; width: 40px; text-align: right; }
+    .s-name  { font-weight: 600; flex: 1; }
+    .s-range { color: var(--text-dim); font-size: 0.8rem; }
+
+    /* History */
+    .dist-chart { display: flex; flex-direction: column; gap: 6px; }
+    .dist-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+    .dist-lbl { min-width: 150px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dist-bar-bg { flex: 1; background: var(--surface2); border-radius: 4px; height: 16px; overflow: hidden; }
+    .dist-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.5s ease; }
+    .dist-cnt { min-width: 20px; text-align: right; color: var(--text-dim); }
+
+    .hist-list { display: flex; flex-direction: column; gap: 7px; }
+    .hist-item {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 9px; padding: 10px 12px; display: flex; align-items: center; gap: 10px;
+    }
+    .hi-num { font-size: 0.72rem; color: var(--text-dim); min-width: 28px; }
+    .hi-cities { flex: 1; font-size: 0.83rem; }
+    .hi-cities span { color: var(--text-dim); }
+    .hi-grade { text-align: right; font-size: 0.83rem; font-weight: 600; }
+    .hi-deg   { font-size: 0.72rem; color: var(--text-dim); }
+
+    /* Feedback link */
+    .feedback-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--accent); text-decoration: none; font-size: 0.875rem;
+    }
+    .feedback-link:hover { text-decoration: underline; }
+
+    /* ── TOAST ───────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%) translateY(70px);
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); padding: 9px 20px; border-radius: 20px;
+      font-size: 0.875rem; z-index: 200; transition: transform 0.3s ease; white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── REVEAL ANIMATIONS ───────────────────────── */
+    @keyframes dir-fade-up  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @keyframes dir-pop-in   { 0% { opacity: 0; transform: scale(0.3); } 70% { transform: scale(1.15); } 100% { opacity: 1; transform: scale(1); } }
+    @keyframes dir-shake    { 0%,100% { transform: translate(0,0); } 10% { transform: translate(-6px,2px); } 20% { transform: translate(5px,-3px); } 30% { transform: translate(-4px,3px); } 40% { transform: translate(4px,-2px); } 50% { transform: translate(-3px,2px); } 60% { transform: translate(3px,-1px); } 70% { transform: translate(-2px,1px); } 80% { transform: translate(2px,0); } 90% { transform: translate(-1px,0); } }
+    @keyframes dir-flash    { 0% { opacity: 0; } 15% { opacity: 0.9; } 100% { opacity: 0; } }
+    @keyframes dir-zeus-pop { 0% { opacity: 0; transform: scale(0.2) rotate(-20deg); } 60% { transform: scale(1.6) rotate(8deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+
+    body[data-state="result"] #r-emoji    { animation: dir-pop-in  520ms cubic-bezier(.34,1.56,.64,1) both; }
+    body[data-state="result"] #r-name     { animation: dir-fade-up 380ms ease-out 250ms both; }
+    body[data-state="result"] #r-feedback { animation: dir-fade-up 380ms ease-out 450ms both; }
+    body[data-state="result"] #r-streak   { animation: dir-fade-up 380ms ease-out 600ms both; }
+    body[data-state="result"] #panel-result .stats-row { animation: dir-fade-up 380ms ease-out 700ms both; }
+    body[data-state="result"] #result-map { animation: dir-fade-up 420ms ease-out 900ms both; }
+    body[data-state="result"] #panel-result .btn-row  { animation: dir-fade-up 380ms ease-out 1100ms both; }
+
+    body[data-tier="zeus"][data-state="result"] #r-emoji      { animation: dir-zeus-pop 900ms cubic-bezier(.34,1.56,.64,1) 300ms both; font-size: 1.2em; }
+    body[data-tier="zeus"][data-state="result"] #panel-result { animation: dir-shake 600ms ease-in-out 350ms both; }
+    body[data-tier="zeus"][data-state="result"] #lightning-overlay { display: block; animation: dir-flash 500ms ease-out 300ms both; }
+
+    #lightning-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: #fff;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body[data-state="result"] #r-emoji,
+      body[data-state="result"] #r-name,
+      body[data-state="result"] #r-feedback,
+      body[data-state="result"] #r-streak,
+      body[data-state="result"] #panel-result .stats-row,
+      body[data-state="result"] #result-map,
+      body[data-state="result"] #panel-result .btn-row,
+      body[data-tier="zeus"][data-state="result"] #r-emoji,
+      body[data-tier="zeus"][data-state="result"] #panel-result { animation: none; }
+      body[data-tier="zeus"][data-state="result"] #lightning-overlay { display: none; }
+    }
+
+    /* ── COMMUNITY STATS ────────────────────────── */
+    .community-stats {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .community-stats-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .community-chart { display: flex; flex-direction: column; gap: 5px; }
+    .community-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+    .community-lbl { min-width: 110px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .community-bar-bg { flex: 1; background: var(--surface2); border-radius: 4px; height: 16px; overflow: hidden; }
+    .community-bar { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+    .community-bar.player-grade { background: var(--accent); }
+    .community-bar.other-grade { background: #3a4870; }
+    .community-pct { min-width: 42px; text-align: right; color: var(--text-dim); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+    .community-total {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 8px;
+    }
+
+    /* ── BIRTHDAY SUMMARY ────────────────────────── */
+    .bday-table-wrap {
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; max-height: 360px; overflow-y: auto;
+    }
+    .bday-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .bday-table th, .bday-table td {
+      padding: 7px 10px; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .bday-table tr:last-child td { border-bottom: none; }
+    .bday-table th {
+      font-size: 0.62rem; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-dim);
+      position: sticky; top: 0; background: var(--surface); z-index: 1;
+    }
+    .bday-table td.rnum { color: var(--text-dim); width: 28px; font-variant-numeric: tabular-nums; }
+    .bday-table td.pair { font-size: 0.78rem; }
+    .bday-table td.pair .pair-a { color: var(--city-a); }
+    .bday-table td.pair .pair-b { color: var(--city-b); }
+    .bday-table td.pair .pair-arrow { color: var(--text-dim); }
+    .bday-table td.grade { text-align: right; white-space: nowrap; font-weight: 600; }
+    .bday-table td.deg { text-align: right; color: var(--text-dim); font-variant-numeric: tabular-nums; width: 50px; }
+
+    /* ── RESPONSIVE ──────────────────────────────── */
+    @media (max-width: 380px) {
+      #target-display { width: 280px; height: 280px; }
+      #compass-wrap   { width: 200px; height: 200px; }
+      .grade-name { font-size: 1.35rem; }
+      .intro-title { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+
+<body data-state="idle">
+
+  <header>
+    <div class="logo">
+      <div class="logo-compass">🧭</div>
+      <div class="logo-text">
+        <div class="logo-name">Directional</div>
+        <div class="us-badge">🇺🇸 US Edition</div>
+        <div class="puzzle-num" id="puzzle-num">#1</div>
+        <div class="test-badge" id="test-badge" style="display:none">Test Mode</div>
+        <div class="bday-badge" id="bday-badge" style="display:none">🎂 Birthday Series</div>
+      </div>
+    </div>
+    <div class="header-btns">
+      <a href="mailto:feedback@directional.global" class="icon-btn" title="Send Feedback">✉</a>
+      <button class="icon-btn" id="btn-history" title="My History">📊</button>
+      <button class="icon-btn" id="btn-help"    title="How to play">?</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── INTRO ── -->
+    <div class="panel" id="panel-intro">
+      <div class="intro-card">
+        <div class="intro-logo">🧭</div>
+        <div class="intro-title">Directional USA</div>
+        <div class="intro-desc">
+          Each day, two American cities appear on screen.<br>
+          Set the <strong>compass bearing</strong> from the starting city to the target city.<br>
+          You have <strong>one chance</strong>. How good is your sense of direction?
+        </div>
+        <div class="intro-scoring">
+          <div class="scoring-row"><span class="s-emoji">⚡</span><span class="s-name">Zeus</span><span class="s-range">0°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🖖</span><span class="s-name">Capt. James T. Kirk</span><span class="s-range">1° – 5°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🌊</span><span class="s-name">Moana</span><span class="s-range">6° – 14°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🗺️</span><span class="s-name">Dora the Explorer</span><span class="s-range">15° – 24°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🏴‍☠️</span><span class="s-name">Jack Sparrow</span><span class="s-range">25° – 34°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🏝️</span><span class="s-name">Gilligan</span><span class="s-range">35° – 44°</span></div>
+          <div class="scoring-row"><span class="s-emoji">⚓</span><span class="s-name">Odysseus</span><span class="s-range">45° +</span></div>
+        </div>
+        <button class="btn btn-primary btn-lg" id="btn-intro-start">Let's Play →</button>
+      </div>
+    </div>
+
+    <!-- ── IDLE ── -->
+    <div class="panel" id="panel-idle">
+      <div class="idle-card">
+        <div class="idle-label">Today's Challenge</div>
+        <div class="city-pair">
+          <div class="city-chip a" id="idle-city-a">—</div>
+          <div class="city-arrow">→</div>
+          <div class="city-chip b" id="idle-city-b">—</div>
+        </div>
+        <div class="idle-desc">
+          Set the compass bearing from the <strong>starting city</strong> to the <strong>target city</strong>.
+          You have <strong>one chance</strong> — think carefully before you submit!
+        </div>
+      </div>
+      <button class="btn btn-primary btn-lg" id="btn-start">Start →</button>
+    </div>
+
+    <!-- ── PLAYING ── -->
+    <div class="panel" id="panel-playing">
+
+      <!-- JF: Moved the "From" to above the compass to reduce confusion -->
+      <div class="from-label">
+        <div class="from-tag">From</div>
+        <div class="from-name" id="from-name">New York</div>
+      </div>
+
+      <div id="target-display">
+        <div id="target-label">
+          <div class="target-dot"></div>
+          <div class="target-name" id="target-name">TARGET</div>
+        </div>
+        <div id="compass-wrap">
+          <svg id="compass-svg" viewBox="-120 -120 240 240">
+            <circle r="115" fill="#0f1628" stroke="var(--border)" stroke-width="1.5"/>
+            <g id="compass-ticks"></g>
+            <circle r="108" fill="none" stroke="var(--border)" stroke-width="1"/>
+            <text x="0"   y="-84" text-anchor="middle" dominant-baseline="middle" fill="#ff5555" font-size="12" font-weight="700">N</text>
+            <text x="84"  y="0"   text-anchor="middle" dominant-baseline="middle" fill="var(--text-dim)" font-size="11" font-weight="600">E</text>
+            <text x="0"   y="84"  text-anchor="middle" dominant-baseline="middle" fill="var(--text-dim)" font-size="11" font-weight="600">S</text>
+            <text x="-84" y="0"   text-anchor="middle" dominant-baseline="middle" fill="var(--text-dim)" font-size="11" font-weight="600">W</text>
+            <g id="needle" transform="rotate(0)">
+              <polygon points="0,-76 -7,-8 7,-8"  fill="var(--needle-n)" opacity="0.95"/>
+              <polygon points="0,76 -7,8 7,8"     fill="var(--needle-s)" opacity="0.85"/>
+              <circle r="5.5" fill="#e2e8f8" stroke="#0f1628" stroke-width="1.5"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="bearing-display">
+        <div class="bearing-deg" id="bearing-deg">000°</div>
+        <div class="bearing-card" id="bearing-card">N</div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="btn-hint">💡 Hint</button>
+        <button class="btn btn-primary" id="btn-submit" style="flex:2">Submit →</button>
+      </div>
+
+      <div id="hint-reveal"></div>
+    </div>
+
+    <!-- ── RESULT ── -->
+    <div class="panel" id="panel-result">
+      <div class="grade-card">
+        <div class="grade-emoji" id="r-emoji">🖖</div>
+        <div class="grade-name"  id="r-name">Captain James T. Kirk</div>
+        <div class="grade-feedback" id="r-feedback">"Warp speed precision."</div>
+        <div class="grade-streak" id="r-streak"></div>
+      </div>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-label">Your Guess</div>
+          <div class="stat-value" id="r-guess">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Correct</div>
+          <div class="stat-value" id="r-correct">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Off By</div>
+          <div class="stat-value" id="r-diff">—</div>
+        </div>
+      </div>
+      <div id="result-map"></div>
+      <div class="community-stats" id="community-stats-result" style="display:none">
+        <div class="community-stats-title">How others played today</div>
+        <div class="community-chart" id="community-chart-result"></div>
+        <div class="community-total" id="community-total-result"></div>
+      </div>
+      <div class="btn-row" style="max-width:100%">
+        <button class="btn btn-secondary" id="btn-r-history">📊 History</button>
+        <button class="btn btn-primary"   id="btn-r-share">📋 Share</button>
+      </div>
+      <button class="btn btn-secondary" id="btn-play-again" style="display:none;width:100%;max-width:340px">Play Again →</button>
+    </div>
+
+    <!-- ── BIRTHDAY SUMMARY ── -->
+    <div class="panel" id="panel-bday-summary">
+      <div class="grade-card">
+        <div class="grade-emoji">🎂</div>
+        <div class="grade-name">Birthday Series Complete!</div>
+        <div class="grade-feedback" id="bday-feedback">Happy birthday, Dad!</div>
+      </div>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-label">Total Score</div>
+          <div class="stat-value" id="bday-total-pts">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Avg Off</div>
+          <div class="stat-value" id="bday-avg">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Rounds</div>
+          <div class="stat-value" id="bday-rounds">—</div>
+        </div>
+      </div>
+      <div class="bday-table-wrap">
+        <table class="bday-table">
+          <thead>
+            <tr><th>#</th><th>Pair</th><th style="text-align:right">Grade</th><th style="text-align:right">Off</th></tr>
+          </thead>
+          <tbody id="bday-table-body"></tbody>
+        </table>
+      </div>
+      <div class="btn-row" style="max-width:100%">
+        <button class="btn btn-secondary" id="btn-bday-restart">🔄 Play Again</button>
+        <button class="btn btn-primary" id="btn-bday-share">📋 Share</button>
+      </div>
+    </div>
+
+    <!-- ── DONE ── -->
+    <div class="panel" id="panel-done">
+      <div class="done-card">
+        <div class="done-title">Already played today!</div>
+        <div class="done-sub" id="done-sub">Come back tomorrow for a new puzzle.</div>
+      </div>
+      <div id="done-map"></div>
+      <div class="community-stats" id="community-stats-done" style="display:none">
+        <div class="community-stats-title">How others played today</div>
+        <div class="community-chart" id="community-chart-done"></div>
+        <div class="community-total" id="community-total-done"></div>
+      </div>
+      <div class="btn-row" style="max-width:100%">
+        <button class="btn btn-secondary" id="btn-d-history">📊 History</button>
+        <button class="btn btn-primary"   id="btn-d-share">📋 Share</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── MODAL: How to play ── -->
+  <div class="overlay" id="modal-help">
+    <div class="modal">
+      <div class="modal-hdr">
+        <!--JF: Reworded from "How to Play" to "Help"-->
+        <div class="modal-title">Help</div>
+        <button class="modal-close" data-close="modal-help">✕</button>
+      </div>
+      <div class="modal-section">
+	<!-- JF: Reworded and reformatted the instructions including indenting content below each heading-->
+        <h3><strong>How to Play</strong></h3>
+        <p style="margin-left: 20px;">A <strong>starting city</strong> sits at the compass center. Your mission: rotate the compass needle to point to the <strong>target city</strong>.</p>
+        <p style="margin-left: 20px;">You have <strong>one chance</strong>. No take-backs!</p>
+      </div>
+      <div class="modal-section">
+        <h3><strong>The Challenge</strong></h3>
+        <p style="margin-left: 20px;">The bearing is a <strong>rhumb line heading</strong> — the constant compass direction you'd follow to travel from one city to the other on a standard map.</p>
+        <p style="margin-left: 20px;">See how your navigation skills compare to some famous (fictional) explorers.</p>
+      </div>
+      <div class="modal-section">
+        <h3><strong>Scoring</strong></h3>
+        <div class="scoring-list">
+          <div class="scoring-row"><span class="s-emoji">⚡</span><span class="s-name">Zeus</span><span class="s-range">0°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🖖</span><span class="s-name">Capt. James T. Kirk</span><span class="s-range">1° – 5°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🌊</span><span class="s-name">Moana</span><span class="s-range">6° – 14°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🗺️</span><span class="s-name">Dora the Explorer</span><span class="s-range">15° – 24°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🏴‍☠️</span><span class="s-name">Jack Sparrow</span><span class="s-range">25° – 34°</span></div>
+          <div class="scoring-row"><span class="s-emoji">🏝️</span><span class="s-name">Gilligan</span><span class="s-range">35° – 44°</span></div>
+          <div class="scoring-row"><span class="s-emoji">⚓</span><span class="s-name">Odysseus</span><span class="s-range">45° or more</span></div>
+        </div>
+      </div>
+      <div class="modal-section">
+        <h3><strong>Tips</strong></h3>
+        <p style="margin-left: 20px;">Use <strong>💡 Hint</strong> to reveal which states both cities are in. New puzzle every day at midnight UTC.</p>
+      </div>
+      <div class="modal-section">
+        <h3>World Edition</h3>
+        <p style="margin-left: 20px;"><a href="../" class="feedback-link">🌍 Play the world edition →</a></p>
+      </div>
+      <div class="modal-section">
+        <h3>Feedback</h3>
+        <p style="margin-left: 20px;"><a href="mailto:feedback@directional.global" class="feedback-link">✉ feedback@directional.global</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL: History ── -->
+  <div class="overlay" id="modal-history">
+    <div class="modal">
+      <div class="modal-hdr">
+        <div class="modal-title">My History</div>
+        <button class="modal-close" data-close="modal-history">✕</button>
+      </div>
+      <div class="modal-section">
+        <h3>Grade Distribution</h3>
+        <div class="dist-chart" id="dist-chart"></div>
+      </div>
+      <div class="modal-section">
+        <h3>Past Games</h3>
+        <div class="hist-list" id="hist-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+  // ═══════════════════════════════════════════════════════════════
+  // TEST MODE
+  // ═══════════════════════════════════════════════════════════════
+
+  // ═══════════════════════════════════════════════════════════════
+  // SUPABASE CONFIG (community stats)
+  // ═══════════════════════════════════════════════════════════════
+
+  const SUPABASE_URL = 'https://qnlzjddurxpfszhitreb.supabase.co';  // e.g. 'https://abcdefg.supabase.co'
+  const SUPABASE_KEY = 'sb_publishable_s0MLm4hC1PUsCwAK4HszUg_lLCQWmau';  // anon public key
+
+  const TEST_MODE = new URLSearchParams(location.search).has('test');
+  if (TEST_MODE) document.getElementById('test-badge').style.display = '';
+
+  const BDAY_MODE = new URLSearchParams(location.search).has('bday');
+  if (BDAY_MODE) document.getElementById('bday-badge').style.display = '';
+
+  // ═══════════════════════════════════════════════════════════════
+  // DATA
+  // ═══════════════════════════════════════════════════════════════
+
+  // US edition: `country` holds the state — pairing and hints work cross-state.
+  const CITIES = [
+    {id:'new_york',        name:'New York',         country:'New York',             lat:40.7128,  lon:-74.0060},
+    {id:'buffalo',         name:'Buffalo',          country:'New York',             lat:42.8864,  lon:-78.8784},
+    {id:'albany',          name:'Albany',           country:'New York',             lat:42.6526,  lon:-73.7562},
+    {id:'syracuse',        name:'Syracuse',         country:'New York',             lat:43.0481,  lon:-76.1474},
+    {id:'boston',          name:'Boston',           country:'Massachusetts',        lat:42.3601,  lon:-71.0589},
+    {id:'philadelphia',    name:'Philadelphia',     country:'Pennsylvania',         lat:39.9526,  lon:-75.1652},
+    {id:'pittsburgh',      name:'Pittsburgh',       country:'Pennsylvania',         lat:40.4406,  lon:-79.9959},
+    {id:'harrisburg',      name:'Harrisburg',       country:'Pennsylvania',         lat:40.2732,  lon:-76.8867},
+    {id:'newark',          name:'Newark',           country:'New Jersey',           lat:40.7357,  lon:-74.1724},
+    {id:'atlantic_city',   name:'Atlantic City',    country:'New Jersey',           lat:39.3643,  lon:-74.4229},
+    {id:'hartford',        name:'Hartford',         country:'Connecticut',          lat:41.7658,  lon:-72.6734},
+    {id:'providence',      name:'Providence',       country:'Rhode Island',         lat:41.8240,  lon:-71.4128},
+    {id:'burlington',      name:'Burlington',       country:'Vermont',              lat:44.4759,  lon:-73.2121},
+    {id:'bangor',          name:'Bangor',           country:'Maine',                lat:44.8016,  lon:-68.7712},
+    {id:'manchester',      name:'Manchester',       country:'New Hampshire',        lat:42.9956,  lon:-71.4548},
+    {id:'washington_dc',   name:'Washington, D.C.', country:'District of Columbia', lat:38.9072,  lon:-77.0369},
+    {id:'baltimore',       name:'Baltimore',        country:'Maryland',             lat:39.2904,  lon:-76.6122},
+    {id:'wilmington',      name:'Wilmington',       country:'Delaware',             lat:39.7391,  lon:-75.5398},
+    {id:'richmond',        name:'Richmond',         country:'Virginia',             lat:37.5407,  lon:-77.4360},
+    {id:'virginia_beach',  name:'Virginia Beach',   country:'Virginia',             lat:36.8529,  lon:-75.9780},
+    {id:'morgantown',      name:'Morgantown',       country:'West Virginia',        lat:39.6295,  lon:-79.9559},
+    {id:'raleigh',         name:'Raleigh',          country:'North Carolina',       lat:35.7796,  lon:-78.6382},
+    {id:'charlotte',       name:'Charlotte',        country:'North Carolina',       lat:35.2271,  lon:-80.8431},
+    {id:'asheville',       name:'Asheville',        country:'North Carolina',       lat:35.5951,  lon:-82.5515},
+    {id:'charleston',      name:'Charleston',       country:'South Carolina',       lat:32.7765,  lon:-79.9311},
+    {id:'columbia',        name:'Columbia',         country:'South Carolina',       lat:34.0007,  lon:-81.0348},
+    {id:'atlanta',         name:'Atlanta',          country:'Georgia',              lat:33.7490,  lon:-84.3880},
+    {id:'savannah',        name:'Savannah',         country:'Georgia',              lat:32.0809,  lon:-81.0912},
+    {id:'jacksonville',    name:'Jacksonville',     country:'Florida',              lat:30.3322,  lon:-81.6557},
+    {id:'orlando',         name:'Orlando',          country:'Florida',              lat:28.5383,  lon:-81.3792},
+    {id:'tampa',           name:'Tampa',            country:'Florida',              lat:27.9506,  lon:-82.4572},
+    {id:'miami',           name:'Miami',            country:'Florida',              lat:25.7617,  lon:-80.1918},
+    {id:'key_west',        name:'Key West',         country:'Florida',              lat:24.5551,  lon:-81.7800},
+    {id:'tallahassee',     name:'Tallahassee',      country:'Florida',              lat:30.4383,  lon:-84.2807},
+    {id:'nashville',       name:'Nashville',        country:'Tennessee',            lat:36.1627,  lon:-86.7816},
+    {id:'memphis',         name:'Memphis',          country:'Tennessee',            lat:35.1495,  lon:-90.0490},
+    {id:'knoxville',       name:'Knoxville',        country:'Tennessee',            lat:35.9606,  lon:-83.9207},
+    {id:'louisville',      name:'Louisville',       country:'Kentucky',             lat:38.2527,  lon:-85.7585},
+    {id:'lexington',       name:'Lexington',        country:'Kentucky',             lat:38.0406,  lon:-84.5037},
+    {id:'birmingham',      name:'Birmingham',       country:'Alabama',              lat:33.5186,  lon:-86.8104},
+    {id:'montgomery',      name:'Montgomery',       country:'Alabama',              lat:32.3792,  lon:-86.3077},
+    {id:'mobile',          name:'Mobile',           country:'Alabama',              lat:30.6954,  lon:-88.0399},
+    {id:'jackson',         name:'Jackson',          country:'Mississippi',          lat:32.2988,  lon:-90.1848},
+    {id:'new_orleans',     name:'New Orleans',      country:'Louisiana',            lat:29.9511,  lon:-90.0715},
+    {id:'baton_rouge',     name:'Baton Rouge',      country:'Louisiana',            lat:30.4515,  lon:-91.1871},
+    {id:'little_rock',     name:'Little Rock',      country:'Arkansas',             lat:34.7465,  lon:-92.2896},
+    {id:'oklahoma_city',   name:'Oklahoma City',    country:'Oklahoma',             lat:35.4676,  lon:-97.5164},
+    {id:'tulsa',           name:'Tulsa',            country:'Oklahoma',             lat:36.1540,  lon:-95.9928},
+    {id:'dallas',          name:'Dallas',           country:'Texas',                lat:32.7767,  lon:-96.7970},
+    {id:'houston',         name:'Houston',          country:'Texas',                lat:29.7604,  lon:-95.3698},
+    {id:'austin',          name:'Austin',           country:'Texas',                lat:30.2672,  lon:-97.7431},
+    {id:'san_antonio',     name:'San Antonio',      country:'Texas',                lat:29.4241,  lon:-98.4936},
+    {id:'el_paso',         name:'El Paso',          country:'Texas',                lat:31.7619,  lon:-106.4850},
+    {id:'amarillo',        name:'Amarillo',         country:'Texas',                lat:35.2220,  lon:-101.8313},
+    {id:'corpus_christi',  name:'Corpus Christi',   country:'Texas',                lat:27.8006,  lon:-97.3964},
+    {id:'chicago',         name:'Chicago',          country:'Illinois',             lat:41.8781,  lon:-87.6298},
+    {id:'detroit',         name:'Detroit',          country:'Michigan',             lat:42.3314,  lon:-83.0458},
+    {id:'grand_rapids',    name:'Grand Rapids',     country:'Michigan',             lat:42.9634,  lon:-85.6681},
+    {id:'cleveland',       name:'Cleveland',        country:'Ohio',                 lat:41.4993,  lon:-81.6944},
+    {id:'columbus',        name:'Columbus',         country:'Ohio',                 lat:39.9612,  lon:-82.9988},
+    {id:'cincinnati',      name:'Cincinnati',       country:'Ohio',                 lat:39.1031,  lon:-84.5120},
+    {id:'indianapolis',    name:'Indianapolis',     country:'Indiana',              lat:39.7684,  lon:-86.1581},
+    {id:'milwaukee',       name:'Milwaukee',        country:'Wisconsin',            lat:43.0389,  lon:-87.9065},
+    {id:'madison',         name:'Madison',          country:'Wisconsin',            lat:43.0731,  lon:-89.4012},
+    {id:'minneapolis',     name:'Minneapolis',      country:'Minnesota',            lat:44.9778,  lon:-93.2650},
+    {id:'duluth',          name:'Duluth',           country:'Minnesota',            lat:46.7867,  lon:-92.1005},
+    {id:'des_moines',      name:'Des Moines',       country:'Iowa',                 lat:41.5868,  lon:-93.6250},
+    {id:'st_louis',        name:'St. Louis',        country:'Missouri',             lat:38.6270,  lon:-90.1994},
+    {id:'kansas_city',     name:'Kansas City',      country:'Missouri',             lat:39.0997,  lon:-94.5786},
+    {id:'omaha',           name:'Omaha',            country:'Nebraska',             lat:41.2565,  lon:-95.9345},
+    {id:'wichita',         name:'Wichita',          country:'Kansas',               lat:37.6872,  lon:-97.3301},
+    {id:'fargo',           name:'Fargo',            country:'North Dakota',         lat:46.8772,  lon:-96.7898},
+    {id:'bismarck',        name:'Bismarck',         country:'North Dakota',         lat:46.8083,  lon:-100.7837},
+    {id:'sioux_falls',     name:'Sioux Falls',      country:'South Dakota',         lat:43.5446,  lon:-96.7311},
+    {id:'rapid_city',      name:'Rapid City',       country:'South Dakota',         lat:44.0805,  lon:-103.2310},
+    {id:'denver',          name:'Denver',           country:'Colorado',             lat:39.7392,  lon:-104.9903},
+    {id:'colorado_springs',name:'Colorado Springs', country:'Colorado',             lat:38.8339,  lon:-104.8214},
+    {id:'cheyenne',        name:'Cheyenne',         country:'Wyoming',              lat:41.1400,  lon:-104.8202},
+    {id:'casper',          name:'Casper',           country:'Wyoming',              lat:42.8501,  lon:-106.3252},
+    {id:'billings',        name:'Billings',         country:'Montana',              lat:45.7833,  lon:-108.5007},
+    {id:'missoula',        name:'Missoula',         country:'Montana',              lat:46.8721,  lon:-113.9940},
+    {id:'boise',           name:'Boise',            country:'Idaho',                lat:43.6150,  lon:-116.2023},
+    {id:'salt_lake_city',  name:'Salt Lake City',   country:'Utah',                 lat:40.7608,  lon:-111.8910},
+    {id:'albuquerque',     name:'Albuquerque',      country:'New Mexico',           lat:35.0844,  lon:-106.6504},
+    {id:'santa_fe',        name:'Santa Fe',         country:'New Mexico',           lat:35.6870,  lon:-105.9378},
+    {id:'phoenix',         name:'Phoenix',          country:'Arizona',              lat:33.4484,  lon:-112.0740},
+    {id:'tucson',          name:'Tucson',           country:'Arizona',              lat:32.2226,  lon:-110.9747},
+    {id:'flagstaff',       name:'Flagstaff',        country:'Arizona',              lat:35.1983,  lon:-111.6513},
+    {id:'las_vegas',       name:'Las Vegas',        country:'Nevada',               lat:36.1699,  lon:-115.1398},
+    {id:'reno',            name:'Reno',             country:'Nevada',               lat:39.5296,  lon:-119.8138},
+    {id:'los_angeles',     name:'Los Angeles',      country:'California',           lat:34.0522,  lon:-118.2437},
+    {id:'san_diego',       name:'San Diego',        country:'California',           lat:32.7157,  lon:-117.1611},
+    {id:'san_francisco',   name:'San Francisco',    country:'California',           lat:37.7749,  lon:-122.4194},
+    {id:'sacramento',      name:'Sacramento',       country:'California',           lat:38.5816,  lon:-121.4944},
+    {id:'fresno',          name:'Fresno',           country:'California',           lat:36.7378,  lon:-119.7871},
+    {id:'portland',        name:'Portland',         country:'Oregon',               lat:45.5152,  lon:-122.6784},
+    {id:'eugene',          name:'Eugene',           country:'Oregon',               lat:44.0521,  lon:-123.0868},
+    {id:'seattle',         name:'Seattle',          country:'Washington',           lat:47.6062,  lon:-122.3321},
+    {id:'spokane',         name:'Spokane',          country:'Washington',           lat:47.6588,  lon:-117.4260},
+    {id:'anchorage',       name:'Anchorage',        country:'Alaska',               lat:61.2181,  lon:-149.9003},
+    {id:'fairbanks',       name:'Fairbanks',        country:'Alaska',               lat:64.8378,  lon:-147.7164},
+    {id:'juneau',          name:'Juneau',           country:'Alaska',               lat:58.3019,  lon:-134.4197},
+    {id:'honolulu',        name:'Honolulu',         country:'Hawaii',               lat:21.3069,  lon:-157.8583},
+    {id:'hilo',            name:'Hilo',             country:'Hawaii',               lat:19.7074,  lon:-155.0885},
+  ];
+
+  const CITY_MAP = Object.fromEntries(CITIES.map(c => [c.id, c]));
+
+  // ═══════════════════════════════════════════════════════════════
+  // BIRTHDAY MODE — curated places & pairs (?bday)
+  // Places personal to the family; pairs mix intra-town (close,
+  // tests subtle within-town direction) with cross-category (far).
+  // ═══════════════════════════════════════════════════════════════
+
+  const BDAY_PLACES = [
+    // ── Summit, NJ ──  (town/area used as display name for cross-town pairs)
+    {id:'summit_ymca',  name:'Summit YMCA',      country:'Summit, NJ',       lat:40.7160,  lon:-74.3597, town:'Summit, NJ',     area:'New Jersey'},
+    {id:'tulip_90',     name:'90 Tulip St',      country:'Summit, NJ',       lat:40.7064,  lon:-74.3635, town:'Summit, NJ',     area:'New Jersey'},
+    {id:'blackburn_14', name:'14 Blackburn Pl',  country:'Summit, NJ',       lat:40.7019,  lon:-74.3697, town:'Summit, NJ',     area:'New Jersey'},
+    {id:'oak_knoll',    name:'Oak Knoll School', country:'Summit, NJ',       lat:40.6985,  lon:-74.3728, town:'Summit, NJ',     area:'New Jersey'},
+    // ── Morristown, NJ ──
+    {id:'westminster_6',name:'6 Westminster Pl', country:'Morris Twp, NJ',   lat:40.7940,  lon:-74.5040, town:'Morristown, NJ', area:'New Jersey'},
+    {id:'mennen',       name:'Mennen Arena',     country:'Morris Twp, NJ',   lat:40.8154,  lon:-74.4753, town:'Morristown, NJ', area:'New Jersey'},
+    {id:'footes_pond',  name:"Foote's Pond",     country:'Morristown, NJ',   lat:40.7960,  lon:-74.4870, town:'Morristown, NJ', area:'New Jersey'},
+    {id:'beard_school', name:'Morristown Beard', country:'Morristown, NJ',   lat:40.8060,  lon:-74.4555, town:'Morristown, NJ', area:'New Jersey'},
+    // ── Kids ──
+    {id:'smu',          name:'SMU',              country:'Dallas, TX',       lat:32.8441,  lon:-96.7849},
+    {id:'duke',         name:'Duke University',  country:'Durham, NC',       lat:36.0014,  lon:-78.9382},
+    {id:'gwu',          name:'GWU',              country:'Washington, DC',   lat:38.8997,  lon:-77.0486},
+    {id:'umd',          name:'U of Maryland',    country:'College Park, MD', lat:38.9874,  lon:-76.9421},
+    {id:'bday_denver',  name:'Denver',           country:'Colorado',         lat:39.7392,  lon:-104.9903},
+    {id:'santa_barbara',name:'Santa Barbara',    country:'California',       lat:34.4208,  lon:-119.6982},
+    {id:'bday_london',  name:'London',           country:'United Kingdom',   lat:51.5074,  lon:-0.1278},
+    {id:'hyattsville',  name:'Hyattsville',      country:'Maryland',         lat:38.9559,  lon:-76.9455},
+    {id:'pasadena',     name:'Pasadena',         country:'California',       lat:34.1478,  lon:-118.1445},
+    // ── Other ──
+    {id:'magnolia_33',  name:'33 Magnolia Ave',  country:'Denville, NJ',     lat:40.8860,  lon:-74.4760, town:'Denville, NJ',   area:'New Jersey'},
+    {id:'nicole_94',    name:'94 Nicole Ct',     country:'Lakewood, NJ',     lat:40.0830,  lon:-74.2260, town:'Lakewood, NJ',   area:'New Jersey'},
+    {id:'oak_view',     name:'Oak View',         country:'California',       lat:34.4000,  lon:-119.3001},
+    {id:'georgetown_tx',name:'Georgetown',       country:'Texas',            lat:30.6327,  lon:-97.6772},
+    {id:'perry_44',     name:'44 Perry St',      country:'New York, NY',     lat:40.7353,  lon:-74.0038, town:'New York, NY',   area:'New York'},
+    {id:'freeport',     name:'Freeport',         country:'Long Island, NY',  lat:40.6576,  lon:-73.5832},
+    {id:'lukore',       name:'Lukore',           country:'Matuga, Kenya',    lat:-4.3525,  lon:39.3149},
+  ];
+
+  const BDAY_PLACE_MAP = Object.fromEntries(BDAY_PLACES.map(p => [p.id, p]));
+
+  // 50 pairs: 12 intra-town (close — tests subtle direction) + 38 cross-category (far)
+  const BDAY_PAIRS = [
+    // ── Intra-Summit (6 close) ──
+    ['summit_ymca', 'oak_knoll'],
+    ['tulip_90',    'blackburn_14'],
+    ['summit_ymca', 'tulip_90'],
+    ['oak_knoll',   'blackburn_14'],
+    ['summit_ymca', 'blackburn_14'],
+    ['tulip_90',    'oak_knoll'],
+    // ── Intra-Morristown (6 close) ──
+    ['mennen',       'footes_pond'],
+    ['mennen',       'beard_school'],
+    ['mennen',       'westminster_6'],
+    ['footes_pond',  'beard_school'],
+    ['footes_pond',  'westminster_6'],
+    ['beard_school', 'westminster_6'],
+    // ── Summit → Kids ──
+    ['summit_ymca',  'smu'],
+    ['tulip_90',     'duke'],
+    ['oak_knoll',    'gwu'],
+    ['blackburn_14', 'umd'],
+    ['summit_ymca',  'bday_denver'],
+    ['oak_knoll',    'santa_barbara'],
+    ['blackburn_14', 'bday_london'],
+    ['tulip_90',     'pasadena'],
+    // ── Morristown → Kids ──
+    ['mennen',         'smu'],
+    ['footes_pond',    'duke'],
+    ['beard_school',   'gwu'],
+    ['westminster_6',  'umd'],
+    ['mennen',         'bday_denver'],
+    ['footes_pond',    'santa_barbara'],
+    ['beard_school',   'bday_london'],
+    ['westminster_6',  'hyattsville'],
+    // ── NJ ↔ Other ──
+    ['summit_ymca',  'perry_44'],
+    ['oak_knoll',    'freeport'],
+    ['blackburn_14', 'magnolia_33'],
+    ['tulip_90',     'nicole_94'],
+    ['mennen',       'magnolia_33'],
+    ['beard_school', 'perry_44'],
+    ['westminster_6','freeport'],
+    ['footes_pond',  'nicole_94'],
+    // ── Geography surprises (kids ↔ other) ──
+    ['smu',          'georgetown_tx'],
+    ['duke',         'perry_44'],
+    ['umd',          'hyattsville'],
+    ['pasadena',     'oak_view'],
+    ['santa_barbara','oak_view'],
+    ['bday_london',  'perry_44'],
+    ['duke',         'umd'],
+    ['smu',          'pasadena'],
+    ['bday_london',  'bday_denver'],
+    ['umd',          'santa_barbara'],
+    // ── Other ↔ Other / Cross-region ──
+    ['perry_44',     'freeport'],
+    ['magnolia_33',  'nicole_94'],
+    ['georgetown_tx','smu'],
+    ['hyattsville',  'oak_view'],
+    // ── Lukore, Kenya (long-distance to the family hubs) ──
+    ['summit_ymca',  'lukore'],
+    ['mennen',       'lukore'],
+    ['bday_london',  'lukore'],
+  ];
+
+  // Shuffle once with a fixed seed so order is the same for everyone
+  // but doesn't run Summit-Summit-Summit... → Morristown-Morristown... → far pairs.
+  (function shuffleBdayPairs() {
+    const rng = mulberry32(20260517);
+    for (let i = BDAY_PAIRS.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [BDAY_PAIRS[i], BDAY_PAIRS[j]] = [BDAY_PAIRS[j], BDAY_PAIRS[i]];
+    }
+  })();
+
+  const BDAY_POINTS = {
+    'Zeus': 100,
+    'Captain James T. Kirk': 80,
+    'Moana': 60,
+    'Dora the Explorer': 40,
+    'Jack Sparrow': 25,
+    'Gilligan': 10,
+    'Odysseus': 5,
+  };
+
+  // Mutable per-session state — reset on page load (no localStorage in bday mode).
+  const bdayState = { round: 0, results: [] };
+
+  function bdayCurrentPair() {
+    const [idA, idB] = BDAY_PAIRS[bdayState.round];
+    const a = BDAY_PLACE_MAP[idA];
+    const b = BDAY_PLACE_MAP[idB];
+    // Intra-town pairs (e.g. Summit→Summit) need precise addresses for the
+    // sub-town direction test. Cross-town pairs read better with just the town
+    // name — the bearing doesn't meaningfully change at that distance.
+    const isIntraTown = a.town && b.town && a.town === b.town;
+    function asDisplay(p) {
+      if (isIntraTown || !p.town) return p;
+      return { ...p, name: p.town, country: p.area || p.country };
+    }
+    return {
+      cityA: asDisplay(a),
+      cityB: asDisplay(b),
+      puzzleNumber: bdayState.round + 1,
+      // dayIndex is required by save/share paths; use a negative sentinel
+      // so it can't collide with anything in stored history.
+      dayIndex: -(bdayState.round + 1),
+      bday: true,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ALGORITHMIC PAIR GENERATION (cross-state, decades of unique pairs)
+  // ═══════════════════════════════════════════════════════════════
+
+  // Mulberry32 PRNG — deterministic, seeded
+  function mulberry32(seed) {
+    return function() {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // Haversine distance in km
+  function haversineKm(a, b) {
+    const R = Math.PI / 180, Er = 6371;
+    const dLat = (b.lat - a.lat) * R, dLon = (b.lon - a.lon) * R;
+    const s = Math.sin(dLat/2)**2 + Math.cos(a.lat*R) * Math.cos(b.lat*R) * Math.sin(dLon/2)**2;
+    return 2 * Er * Math.asin(Math.sqrt(s));
+  }
+
+  // Generate and shuffle all valid pairs
+  let _allPairs = null;
+  function getAllPairs() {
+    if (_allPairs) return _allPairs;
+    const pairs = [];
+    for (let i = 0; i < CITIES.length; i++) {
+      for (let j = 0; j < CITIES.length; j++) {
+        if (i === j) continue;
+        if (CITIES[i].country === CITIES[j].country) continue; // same state
+        if (haversineKm(CITIES[i], CITIES[j]) < 300) continue;
+        pairs.push([CITIES[i].id, CITIES[j].id]);
+      }
+    }
+    // Seeded Fisher-Yates shuffle for deterministic ordering
+    // (different seed than the world edition so the daily pairs are independent)
+    const rng = mulberry32(271828182);
+    for (let i = pairs.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [pairs[i], pairs[j]] = [pairs[j], pairs[i]];
+    }
+    _allPairs = pairs;
+    return pairs;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRADES & FEEDBACK
+  // ═══════════════════════════════════════════════════════════════
+
+  const GRADES = [
+    { name:'Zeus', emoji:'⚡', max:0, msgs:[
+      'Bullseye! Mount Olympus approves.',
+      'Exactly right — the gods themselves couldn\'t do better.',
+      'Perfect aim. Zeus nods in recognition.',
+      'Lightning strikes true. Absolutely perfect.',
+      'The oracle has spoken — and she agrees with you.',
+      'Thunderbolt precision. No mortal compass needed.'
+    ]},
+    { name:'Captain James T. Kirk', emoji:'🖖', max:5, msgs:[
+      'Space may be the final frontier, but you\'ve clearly mastered this one.',
+      'Warp speed precision. Scotty is impressed.',
+      'Captain\'s log: nailed it.',
+      'The Enterprise couldn\'t have charted a better course.',
+      'Boldly going exactly where you needed to go.',
+      'Kirk didn\'t guess. Kirk knew.'
+    ]},
+    { name:'Moana', emoji:'🌊', max:14, msgs:[
+      'The ocean called. You mostly heard it.',
+      'Close enough that the fish are genuinely impressed.',
+      'Te Fiti approves. Mostly.',
+      'You know the way! Well, approximately the way.',
+      'Gramma Tala is smiling — with minor geographical caveats.',
+      'The ocean chose you. It has reasonable standards.'
+    ]},
+    { name:'Dora the Explorer', emoji:'🗺️', max:24, msgs:[
+      'Can you say "close enough"? ¡Muy bien!',
+      'Backpack didn\'t have a better compass.',
+      'Map says you\'re in the neighborhood. Loosely.',
+      'Swiper, no swiping your dignity. Not yet.',
+      'You explored! Just... a bit more than necessary.',
+      'Boots is giving you a polite golf clap.'
+    ]},
+    { name:'Jack Sparrow', emoji:'🏴‍☠️', max:34, msgs:[
+      '"That\'s not — no wait — hmm." Close-ish, mate.',
+      'The compass doesn\'t point north. Neither did yours.',
+      'You sail boldly, if somewhat sideways.',
+      'Rum was involved in this heading, wasn\'t it.',
+      'Savvy? Mostly savvy.',
+      'The Black Pearl has sailed stranger courses. Barely.'
+    ]},
+    { name:'Gilligan', emoji:'🏝️', max:44, msgs:[
+      'Three-hour tour. Went a bit sideways. A lot sideways.',
+      'You\'ll be rescued eventually. Probably.',
+      'The Skipper has opinions. None of them flattering.',
+      'At least you\'re on an island! Somewhere.',
+      'The Professor is building something to correct for this.',
+      'A tale of the sea — and of missing the sea considerably.'
+    ]},
+    { name:'Odysseus', emoji:'⚓', max:Infinity, msgs:[
+      'A decade-long journey. The long way round.',
+      'Poseidon himself couldn\'t have sent you more off course.',
+      'Epic poetry will be written about this navigational disaster.',
+      'You will return home. Eventually. After many trials.',
+      'The Cyclops was actually in that direction.',
+      'This is either very brave or very wrong. Possibly both.'
+    ]},
+  ];
+
+  function getGrade(diff) {
+    const d = Math.round(diff);
+    return GRADES.find(g => d <= g.max) || GRADES[GRADES.length - 1];
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DAILY SEED
+  // ═══════════════════════════════════════════════════════════════
+
+  const LAUNCH_UTC = Date.UTC(2026, 0, 1);
+
+  function getDayIndex() {
+    const n = new Date();
+    return Math.max(0, Math.floor(
+      (Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()) - LAUNCH_UTC) / 86400000
+    ));
+  }
+
+  function getTodaysPair() {
+    const di = getDayIndex();
+    const pairs = getAllPairs();
+    const [idA, idB] = pairs[di % pairs.length];
+    return { cityA: CITY_MAP[idA], cityB: CITY_MAP[idB], puzzleNumber: di + 1, dayIndex: di };
+  }
+
+  function getRandomPair() {
+    const pairs = getAllPairs();
+    const [idA, idB] = pairs[Math.floor(Math.random() * pairs.length)];
+    const di = getDayIndex();
+    return { cityA: CITY_MAP[idA], cityB: CITY_MAP[idB], puzzleNumber: di + 1, dayIndex: di };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BEARING MATH (Rhumb Line)
+  // ═══════════════════════════════════════════════════════════════
+
+  function calcBearing(lat1, lon1, lat2, lon2) {
+    const R = Math.PI / 180;
+    const phi1 = lat1 * R, phi2 = lat2 * R;
+    let dLambda = (lon2 - lon1) * R;
+    const dPhi = Math.log(
+      Math.tan(Math.PI / 4 + phi2 / 2) / Math.tan(Math.PI / 4 + phi1 / 2)
+    );
+    // Wrap longitude difference to [-PI, PI]
+    if (Math.abs(dLambda) > Math.PI) {
+      dLambda = dLambda > 0 ? -(2 * Math.PI - dLambda) : (2 * Math.PI + dLambda);
+    }
+    return (Math.atan2(dLambda, dPhi) * 180 / Math.PI + 360) % 360;
+  }
+
+  function angularDiff(a, b) {
+    const d = Math.abs(a - b);
+    return Math.min(d, 360 - d);
+  }
+
+  function toCardinal(deg) {
+    const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // STORAGE
+  // ═══════════════════════════════════════════════════════════════
+
+  const STORE_KEY = 'directional_us_v1';
+  const VISITED_KEY = 'directional_us_visited';
+
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; }
+  }
+
+  function saveResult(entry) {
+    if (TEST_MODE || BDAY_MODE) return; // Don't save test/bday results
+    try {
+      const h = loadHistory();
+      const i = h.findIndex(e => e.dayIndex === entry.dayIndex);
+      if (i >= 0) h[i] = entry; else h.unshift(entry);
+      localStorage.setItem(STORE_KEY, JSON.stringify(h.slice(0, 365)));
+    } catch {}
+  }
+
+  function getTodaysResult() {
+    if (TEST_MODE || BDAY_MODE) return null; // Always allow replay
+    return loadHistory().find(e => e.dayIndex === getDayIndex()) || null;
+  }
+
+  function computeStreak(dayIndex) {
+    const days = new Set(loadHistory().map(e => e.dayIndex));
+    let streak = 0;
+    for (let d = dayIndex; days.has(d); d--) streak++;
+    return streak;
+  }
+
+  function hasVisited() {
+    try { return localStorage.getItem(VISITED_KEY) === 'true'; } catch { return false; }
+  }
+
+  function markVisited() {
+    try { localStorage.setItem(VISITED_KEY, 'true'); } catch {}
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COMPASS
+  // ═══════════════════════════════════════════════════════════════
+
+  let currentBearing = 0;
+
+  const compassSvg   = document.getElementById('compass-svg');
+  const needleEl     = document.getElementById('needle');
+  const targetLabel  = document.getElementById('target-label');
+  const bearingDegEl = document.getElementById('bearing-deg');
+  const bearingCardEl= document.getElementById('bearing-card');
+
+  const DISPLAY_C = 160;
+  const ORBIT_R   = 140;
+
+  function buildTicks() {
+    const g = document.getElementById('compass-ticks');
+    for (let i = 0; i < 360; i += 5) {
+      if (i % 90 === 0) continue;
+      const isMajor = i % 45 === 0;
+      const len = isMajor ? 14 : 7;
+      const rad = i * Math.PI / 180;
+      const r1 = 108, r2 = 108 - len;
+      const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      ln.setAttribute('x1', Math.sin(rad) * r1); ln.setAttribute('y1', -Math.cos(rad) * r1);
+      ln.setAttribute('x2', Math.sin(rad) * r2); ln.setAttribute('y2', -Math.cos(rad) * r2);
+      ln.setAttribute('stroke', isMajor ? '#3a4870' : '#212d4a');
+      ln.setAttribute('stroke-width', isMajor ? '1.5' : '1');
+      g.appendChild(ln);
+    }
+  }
+
+  function setNeedle(deg) {
+    currentBearing = ((deg % 360) + 360) % 360;
+    needleEl.setAttribute('transform', `rotate(${currentBearing})`);
+    bearingDegEl.textContent  = `${Math.round(currentBearing).toString().padStart(3,'0')}°`;
+    bearingCardEl.textContent = toCardinal(currentBearing);
+
+    const rad = currentBearing * Math.PI / 180;
+    targetLabel.style.left = (DISPLAY_C + Math.sin(rad) * ORBIT_R) + 'px';
+    targetLabel.style.top  = (DISPLAY_C - Math.cos(rad) * ORBIT_R) + 'px';
+  }
+
+  function angleFromEvent(e) {
+    const rect = compassSvg.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+    const px = e.touches ? e.touches[0].clientX : e.clientX;
+    const py = e.touches ? e.touches[0].clientY : e.clientY;
+    return (Math.atan2(px - cx, -(py - cy)) * 180 / Math.PI + 360) % 360;
+  }
+
+  let dragging = false;
+
+  function initCompass() {
+    buildTicks();
+    compassSvg.addEventListener('mousedown',  e => { dragging = true; setNeedle(angleFromEvent(e)); e.preventDefault(); });
+    compassSvg.addEventListener('touchstart', e => { dragging = true; setNeedle(angleFromEvent(e)); e.preventDefault(); }, { passive: false });
+    window.addEventListener('mousemove',  e => { if (dragging) setNeedle(angleFromEvent(e)); });
+    window.addEventListener('touchmove',  e => { if (dragging) { setNeedle(angleFromEvent(e)); e.preventDefault(); } }, { passive: false });
+    window.addEventListener('mouseup',   () => { dragging = false; });
+    window.addEventListener('touchend',  () => { dragging = false; });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // D3 MERCATOR MAP
+  // ═══════════════════════════════════════════════════════════════
+
+  let _worldData = null;
+  let _usAtlas = null;
+
+  async function getWorldData() {
+    if (_worldData) return _worldData;
+    const r = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+    _worldData = await r.json();
+    return _worldData;
+  }
+
+  async function getUsAtlas() {
+    if (_usAtlas) return _usAtlas;
+    const r = await fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json');
+    _usAtlas = await r.json();
+    return _usAtlas;
+  }
+
+  // US state borders as lon/lat GeoJSON (us-atlas is pre-projected, so it
+  // can't be reused here — the bearing lines need a true Mercator projection).
+  let _usStates = null;
+  async function getUsStates() {
+    if (_usStates) return _usStates;
+    const r = await fetch('https://cdn.jsdelivr.net/gh/PublicaMundi/MappingAPI@master/data/geojson/us-states.json');
+    _usStates = await r.json();
+    return _usStates;
+  }
+
+  // Pairs closer than this auto-zoom to fit; far pairs keep the fixed world scale.
+  const ZOOM_KM = 100;
+
+  async function drawMap(containerId, cityA, cityB, guessBearing, trueBearing) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '<div style="height:180px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:0.8rem">Loading map…</div>';
+
+    const W = Math.max(container.clientWidth || 0, 300);
+    const H = Math.round(W * 0.52);
+
+    const isClose = haversineKm(cityA, cityB) < ZOOM_KM;
+
+    let landFeatures, borderMesh, stateFeatures = null, proj;
+    try {
+      if (isClose) {
+        // Close pair → US counties + auto-fit zoom
+        const atlas = await getUsAtlas();
+        landFeatures = topojson.feature(atlas, atlas.objects.counties);
+        borderMesh   = topojson.mesh(atlas, atlas.objects.states, (a, b) => a !== b);
+        // fitExtent auto-computes scale & translate so the two points fit with padding.
+        const pair = { type: 'MultiPoint', coordinates: [[cityA.lon, cityA.lat], [cityB.lon, cityB.lat]] };
+        proj = d3.geoMercator().fitExtent([[40, 40], [W - 40, H - 40]], pair);
+      } else {
+        // US pair → world land for context, state borders overlaid, auto-fit zoom
+        const topo = await getWorldData();
+        landFeatures = topojson.feature(topo, topo.objects.countries);
+        borderMesh   = topojson.mesh(topo, topo.objects.countries, (a, b) => a !== b);
+        stateFeatures = await getUsStates().catch(() => null); // optional overlay
+        const pair = { type: 'MultiPoint', coordinates: [[cityA.lon, cityA.lat], [cityB.lon, cityB.lat]] };
+        proj = d3.geoMercator().fitExtent([[50, 45], [W - 50, H - 45]], pair);
+      }
+    } catch {
+      container.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim);font-size:0.8rem">Map unavailable offline.</div>';
+      return;
+    }
+
+    const path = d3.geoPath().projection(proj);
+
+    const svg = d3.create('svg').attr('viewBox', `0 0 ${W} ${H}`);
+
+    svg.append('defs').append('clipPath').attr('id', `clip-${containerId}`)
+      .append('rect').attr('width', W).attr('height', H);
+
+    svg.append('rect').attr('width', W).attr('height', H).attr('fill', '#060e1c');
+
+    const mapG = svg.append('g').attr('clip-path', `url(#clip-${containerId})`);
+
+    mapG.append('g').selectAll('path').data(landFeatures.features).join('path')
+      .attr('d', path).attr('fill', '#152032').attr('stroke', 'none');
+
+    mapG.append('path').datum(borderMesh).attr('d', path)
+      .attr('fill', 'none').attr('stroke', '#243352').attr('stroke-width', '0.6');
+
+    if (stateFeatures) {
+      mapG.append('g').selectAll('path').data(stateFeatures.features).join('path')
+        .attr('d', path).attr('fill', 'none').attr('stroke', '#243352').attr('stroke-width', '0.6');
+    }
+
+    // City positions on projection
+    const ptA = proj([cityA.lon, cityA.lat]);
+    const ptB = proj([cityB.lon, cityB.lat]);
+
+    // Rhumb line = straight line on Mercator
+    if (ptA && ptB) {
+      mapG.append('line')
+        .attr('x1', ptA[0]).attr('y1', ptA[1])
+        .attr('x2', ptB[0]).attr('y2', ptB[1])
+        .attr('stroke', '#4f9cff').attr('stroke-width', '2.5')
+        .attr('stroke-dasharray', '6 3').attr('opacity', '0.9');
+    }
+
+    // Guess ray — extend a line from city A in the guess bearing direction
+    if (ptA) {
+      const rayLen = Math.max(W, H) * 1.5;
+      const gRad = guessBearing * Math.PI / 180;
+      // On Mercator, bearing angle maps to screen: right=East, up=North
+      const gx = ptA[0] + Math.sin(gRad) * rayLen;
+      const gy = ptA[1] - Math.cos(gRad) * rayLen;
+      mapG.append('line')
+        .attr('x1', ptA[0]).attr('y1', ptA[1])
+        .attr('x2', gx).attr('y2', gy)
+        .attr('stroke', '#ff9944').attr('stroke-width', '1.5')
+        .attr('stroke-dasharray', '5 4').attr('opacity', '0.45');
+    }
+
+    // City dots + labels
+    function addCity(lon, lat, color, label) {
+      const pt = proj([lon, lat]);
+      if (!pt) return;
+      const [px, py] = pt;
+      mapG.append('circle').attr('cx', px).attr('cy', py).attr('r', 4)
+        .attr('fill', color).attr('stroke', '#060e1c').attr('stroke-width', 1.2);
+      const flipLeft = px > W - 70;
+      mapG.append('text')
+        .attr('x', px + (flipLeft ? -7 : 7)).attr('y', py + 3)
+        .attr('text-anchor', flipLeft ? 'end' : 'start')
+        .attr('fill', '#e2e8f8').attr('font-size', '8.5').attr('font-weight', '600')
+        .attr('paint-order', 'stroke').attr('stroke', '#060e1c').attr('stroke-width', '2.2')
+        .text(label);
+    }
+    //JF: Added START and END
+    addCity(cityA.lon, cityA.lat, '#4cdf8a', cityA.name + " (START)");
+    addCity(cityB.lon, cityB.lat, '#ff6b6b', cityB.name + " (END)");
+
+    // Legend
+    const LX = 8, LY = H - 46;
+    const leg = svg.append('g');
+    leg.append('rect').attr('x', LX).attr('y', LY).attr('width', 174).attr('height', 40)
+      .attr('rx', 6).attr('fill', '#060e1c').attr('opacity', 0.85);
+    leg.append('line').attr('x1', LX+8).attr('y1', LY+13).attr('x2', LX+26).attr('y2', LY+13)
+      .attr('stroke', '#4f9cff').attr('stroke-width', 2.5).attr('stroke-dasharray', '5 2');
+    leg.append('text').attr('x', LX+32).attr('y', LY+17).attr('fill', '#6b7aa0').attr('font-size', 9)
+      .text(`Correct: ${Math.round(trueBearing)}° ${toCardinal(trueBearing)}`);
+    leg.append('line').attr('x1', LX+8).attr('y1', LY+30).attr('x2', LX+26).attr('y2', LY+30)
+      .attr('stroke', '#ff9944').attr('stroke-width', 1.5).attr('stroke-dasharray', '4 3');
+    leg.append('text').attr('x', LX+32).attr('y', LY+34).attr('fill', '#6b7aa0').attr('font-size', 9)
+      .text(`Your guess: ${Math.round(guessBearing)}° ${toCardinal(guessBearing)}`);
+
+    container.innerHTML = '';
+    container.appendChild(svg.node());
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // UI HELPERS
+  // ═══════════════════════════════════════════════════════════════
+
+  function setState(s) { document.body.setAttribute('data-state', s); }
+
+  function showToast(msg, ms = 2600) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  function openModal(id)  { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  // ═══════════════════════════════════════════════════════════════
+  // HISTORY MODAL
+  // ═══════════════════════════════════════════════════════════════
+
+  function renderHistory() {
+    const hist = loadHistory();
+    const counts = {};
+    GRADES.forEach(g => counts[g.name] = 0);
+    hist.forEach(e => { if (counts[e.grade] !== undefined) counts[e.grade]++; });
+    const total = hist.length || 1;
+
+    const distEl = document.getElementById('dist-chart');
+    distEl.innerHTML = '';
+    GRADES.forEach(g => {
+      const n = counts[g.name];
+      const pct = Math.round((n / total) * 100);
+      const row = document.createElement('div');
+      row.className = 'dist-row';
+      row.innerHTML = `
+        <div class="dist-lbl">${g.emoji} ${g.name}</div>
+        <div class="dist-bar-bg"><div class="dist-bar" style="width:${n > 0 ? Math.max(pct, 6) : 0}%"></div></div>
+        <div class="dist-cnt">${n}</div>`;
+      distEl.appendChild(row);
+    });
+
+    const listEl = document.getElementById('hist-list');
+    listEl.innerHTML = '';
+    if (!hist.length) {
+      listEl.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem">No games yet — play your first!</p>';
+      return;
+    }
+    hist.slice(0, 30).forEach(e => {
+      const g = GRADES.find(g => g.name === e.grade) || GRADES[GRADES.length - 1];
+      const item = document.createElement('div');
+      item.className = 'hist-item';
+      item.innerHTML = `
+        <div class="hi-num">#${e.puzzleNum}</div>
+        <div class="hi-cities">${e.cityA} <span>→</span> ${e.cityB}</div>
+        <div class="hi-grade">${g.emoji} ${e.grade}<div class="hi-deg">${Math.round(e.diff)}° off</div></div>`;
+      listEl.appendChild(item);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SHARE
+  // ═══════════════════════════════════════════════════════════════
+
+  function buildShareText(pair, diff, gradeName, hintUsed) {
+    const g = GRADES.find(g => g.name === gradeName) || GRADES[GRADES.length - 1];
+    if (pair.bday) {
+      return `🧭 Birthday Round ${pair.puzzleNumber}/${BDAY_PAIRS.length}\n${pair.cityA.name} → ${pair.cityB.name}\n${g.emoji} ${gradeName} (off by ${Math.round(diff)}°)`;
+    }
+	//JF: Added lightbulb and "(hint used)
+    const hintTag = hintUsed ? '\n 💡 (hint used)' : '';
+    //JF: Made reference to directional.global a link
+	  return `🧭 Directional USA 🇺🇸 #${pair.puzzleNumber}\n${pair.cityA.name} → ${pair.cityB.name}\n${g.emoji} ${gradeName} (off by ${Math.round(diff)}°)${hintTag}\n https://directional.global/us`;
+  }
+
+  function share(text) {
+    if (navigator.share) {
+      navigator.share({ text }).catch(() => copyText(text));
+    } else {
+      copyText(text);
+    }
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!'));
+    } else {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Copied to clipboard!');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COMMUNITY STATS (Supabase)
+  // ═══════════════════════════════════════════════════════════════
+
+  // US scores share the same Supabase `scores` table as the world edition,
+  // namespaced by offsetting day_index — queries filter on exact day_index,
+  // so the two editions' charts never mix.
+  const US_STATS_DAY_OFFSET = 100000;
+
+  function hasPostedScore(dayIndex) {
+    try { return localStorage.getItem(`directional_us_posted_${dayIndex}`) === 'true'; } catch { return false; }
+  }
+
+  function markPostedScore(dayIndex) {
+    try { localStorage.setItem(`directional_us_posted_${dayIndex}`, 'true'); } catch {}
+  }
+
+  function postScore(dayIndex, gradeName) {
+    if (!SUPABASE_URL || TEST_MODE || BDAY_MODE || hasPostedScore(dayIndex)) return;
+    fetch(`${SUPABASE_URL}/rest/v1/scores`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ day_index: US_STATS_DAY_OFFSET + dayIndex, grade: gradeName })
+    }).then(() => markPostedScore(dayIndex)).catch(() => {});
+  }
+
+  function renderCommunityChart(chartEl, totalEl, wrapper, counts, total, playerGrade) {
+    chartEl.innerHTML = '';
+    GRADES.forEach(g => {
+      const n = counts[g.name];
+      const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+      const isPlayer = g.name === playerGrade;
+      const row = document.createElement('div');
+      row.className = 'community-row';
+      row.innerHTML = `
+        <div class="community-lbl">${g.emoji} ${g.name}</div>
+        <div class="community-bar-bg"><div class="community-bar ${isPlayer ? 'player-grade' : 'other-grade'}" style="width:${n > 0 ? Math.max(pct, 6) : 0}%"></div></div>
+        <div class="community-pct">${pct}% (${n})</div>`;
+      chartEl.appendChild(row);
+    });
+    totalEl.textContent = `${total} player${total !== 1 ? 's' : ''} today`;
+    wrapper.style.display = '';
+  }
+
+  async function loadCommunityStats(dayIndex, suffix, playerGrade) {
+    if (!SUPABASE_URL || BDAY_MODE) return;
+    const wrapper = document.getElementById(`community-stats-${suffix}`);
+    const chartEl = document.getElementById(`community-chart-${suffix}`);
+    const totalEl = document.getElementById(`community-total-${suffix}`);
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/scores?day_index=eq.${US_STATS_DAY_OFFSET + dayIndex}&select=grade`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (!res.ok) throw new Error(res.status);
+      const rows = await res.json();
+      const counts = {};
+      GRADES.forEach(g => counts[g.name] = 0);
+      rows.forEach(r => { if (counts[r.grade] !== undefined) counts[r.grade]++; });
+      const total = rows.length;
+      if (total > 0) {
+        renderCommunityChart(chartEl, totalEl, wrapper, counts, total, playerGrade);
+      }
+    } catch {
+      wrapper.style.display = 'none';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BIRTHDAY FLOW
+  // ═══════════════════════════════════════════════════════════════
+
+  function bdaySetHeader() {
+    document.getElementById('puzzle-num').textContent =
+      `Round ${bdayState.round + 1} / ${BDAY_PAIRS.length}`;
+  }
+
+  function bdayStartRound() {
+    const pair = bdayCurrentPair();
+    window._pair = pair;
+    bdaySetHeader();
+    document.getElementById('target-name').textContent = pair.cityB.name.toUpperCase();
+    document.getElementById('from-name').textContent   = pair.cityA.name;
+    document.getElementById('hint-reveal').classList.remove('visible');
+    document.getElementById('btn-hint').disabled = false;
+    window._hintUsed = false;
+    setNeedle(180);
+    setState('playing');
+  }
+
+  function bdayNextRound() {
+    bdayState.round++;
+    bdayStartRound();
+  }
+
+  function bdayBuildShareText() {
+    const totalPts = bdayState.results.reduce((s, r) => s + (BDAY_POINTS[r.grade] || 0), 0);
+    const totalDeg = bdayState.results.reduce((s, r) => s + r.diff, 0);
+    const avgDeg = bdayState.results.length ? (totalDeg / bdayState.results.length) : 0;
+    // 10 emojis per line, like Wordle share format
+    const emojis = bdayState.results.map(r => {
+      const g = GRADES.find(g => g.name === r.grade) || GRADES[GRADES.length - 1];
+      return g.emoji;
+    });
+    const lines = [];
+    for (let i = 0; i < emojis.length; i += 10) {
+      lines.push(emojis.slice(i, i + 10).join(''));
+    }
+    return `🧭 Directional Birthday Series\n🏆 ${totalPts} pts • Avg ${avgDeg.toFixed(1)}° off (${bdayState.results.length} rounds)\n\n${lines.join('\n')}`;
+  }
+
+  function bdayShowSummary() {
+    const results = bdayState.results;
+    const totalPts = results.reduce((s, r) => s + (BDAY_POINTS[r.grade] || 0), 0);
+    const totalDeg = results.reduce((s, r) => s + r.diff, 0);
+    const avgDeg = results.length ? (totalDeg / results.length) : 0;
+
+    document.getElementById('bday-total-pts').textContent = totalPts.toLocaleString();
+    document.getElementById('bday-avg').textContent       = `${avgDeg.toFixed(1)}°`;
+    document.getElementById('bday-rounds').textContent    = `${results.length}/${BDAY_PAIRS.length}`;
+
+    // Feedback line varies with performance
+    const avg = avgDeg;
+    let msg;
+    if (avg < 8)       msg = 'Olympus-level navigation. Dad would be proud.';
+    else if (avg < 16) msg = 'Sharp compass sense. Beat that, family!';
+    else if (avg < 25) msg = 'Solid run. Plenty of fight left in you.';
+    else if (avg < 35) msg = 'You took the scenic route. Memorable.';
+    else               msg = 'An Odyssey of a series. The story will be told.';
+    document.getElementById('bday-feedback').textContent = msg;
+
+    const tbody = document.getElementById('bday-table-body');
+    tbody.innerHTML = '';
+    results.forEach(r => {
+      const g = GRADES.find(g => g.name === r.grade) || GRADES[GRADES.length - 1];
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="rnum">${r.round}</td>
+        <td class="pair"><span class="pair-a">${r.cityA}</span> <span class="pair-arrow">→</span> <span class="pair-b">${r.cityB}</span></td>
+        <td class="grade">${g.emoji} ${r.grade}</td>
+        <td class="deg">${Math.round(r.diff)}°</td>`;
+      tbody.appendChild(tr);
+    });
+
+    const shareTxt = bdayBuildShareText();
+    document.getElementById('btn-bday-share').onclick = () => share(shareTxt);
+    document.getElementById('btn-bday-restart').onclick = () => {
+      bdayState.round = 0;
+      bdayState.results = [];
+      bdayStartRound();
+    };
+
+    setState('bday-summary');
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SHOW RESULT
+  // ═══════════════════════════════════════════════════════════════
+
+  function showResult(pair, guess, trueBearing, diff) {
+    // Use rounded values so the displayed guess, correct, and off-by always agree.
+    const guessR   = ((Math.round(guess) % 360) + 360) % 360;
+    const correctR = ((Math.round(trueBearing) % 360) + 360) % 360;
+    const diffR    = angularDiff(guessR, correctR);
+    const grade    = getGrade(diffR);
+    // Feedback varies each time (random, not day-seeded)
+    const feedback = grade.msgs[Math.floor(Math.random() * grade.msgs.length)];
+
+    const hintUsed = !!window._hintUsed;
+    saveResult({
+      dayIndex: pair.dayIndex, puzzleNum: pair.puzzleNumber,
+      cityA: pair.cityA.name, cityB: pair.cityB.name,
+      guess: guessR, correct: correctR,
+      diff: diffR, grade: grade.name, hintUsed
+    });
+
+    document.body.dataset.tier = (grade.name === 'Zeus') ? 'zeus' : 'other';
+
+    document.getElementById('r-emoji').textContent    = grade.emoji;
+    document.getElementById('r-name').textContent     = grade.name;
+    document.getElementById('r-feedback').textContent = `"${feedback}"`;
+    document.getElementById('r-guess').textContent    = `${guessR}° ${toCardinal(guessR)}`;
+    document.getElementById('r-correct').textContent  = `${correctR}° ${toCardinal(correctR)}`;
+    document.getElementById('r-diff').textContent     = `${diffR}°`;
+
+    const streak = computeStreak(pair.dayIndex);
+    const streakEl = document.getElementById('r-streak');
+    streakEl.textContent = streak > 1 ? `🔥 ${streak}-day streak!` : '';
+
+    drawMap('result-map', pair.cityA, pair.cityB, guessR, correctR);
+
+    postScore(pair.dayIndex, grade.name);
+    loadCommunityStats(pair.dayIndex, 'result', grade.name);
+
+    const txt = buildShareText(pair, diffR, grade.name, hintUsed);
+    document.getElementById('btn-r-share').onclick   = () => share(txt);
+    document.getElementById('btn-r-history').onclick = () => { renderHistory(); openModal('modal-history'); };
+
+    // Test mode: show play-again button. Bday mode: show next-round button.
+    const playAgainBtn = document.getElementById('btn-play-again');
+    if (BDAY_MODE) {
+      bdayState.results.push({
+        round: pair.puzzleNumber,
+        cityA: pair.cityA.name, cityB: pair.cityB.name,
+        guess: guessR, correct: correctR, diff: diffR, grade: grade.name,
+      });
+      const isLast = bdayState.round >= BDAY_PAIRS.length - 1;
+      playAgainBtn.style.display = '';
+      playAgainBtn.textContent = isLast
+        ? 'View Summary →'
+        : `Next Round (${bdayState.round + 2}/${BDAY_PAIRS.length}) →`;
+      playAgainBtn.onclick = isLast ? bdayShowSummary : bdayNextRound;
+      document.getElementById('btn-r-history').style.display = 'none';
+    } else if (TEST_MODE) {
+      playAgainBtn.style.display = '';
+      playAgainBtn.textContent = 'Play Again →';
+      playAgainBtn.onclick = () => startNewGame();
+    } else {
+      playAgainBtn.style.display = 'none';
+    }
+
+    setState('result');
+  }
+
+  function showDone(entry, pair) {
+    const g = GRADES.find(g => g.name === entry.grade) || GRADES[GRADES.length - 1];
+    const streak = computeStreak(pair.dayIndex);
+    const streakTag = streak > 1 ? ` 🔥 ${streak}-day streak!` : '';
+    document.getElementById('done-sub').textContent =
+      `${g.emoji} ${entry.grade} — ${Math.round(entry.diff)}° off.${streakTag} Come back tomorrow!`;
+    drawMap('done-map', pair.cityA, pair.cityB, entry.guess, entry.correct);
+    loadCommunityStats(pair.dayIndex, 'done', entry.grade);
+    const txt = buildShareText(pair, entry.diff, entry.grade, entry.hintUsed);
+    document.getElementById('btn-d-share').onclick   = () => share(txt);
+    document.getElementById('btn-d-history').onclick = () => { renderHistory(); openModal('modal-history'); };
+    setState('done');
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GAME START (used by both normal and test mode)
+  // ═══════════════════════════════════════════════════════════════
+
+  function startNewGame() {
+    const pair = TEST_MODE ? getRandomPair() : getTodaysPair();
+    window._pair = pair;
+
+    document.getElementById('puzzle-num').textContent = `#${pair.puzzleNumber}`;
+    document.getElementById('target-name').textContent = pair.cityB.name.toUpperCase();
+    document.getElementById('from-name').textContent   = pair.cityA.name;
+
+    document.getElementById('idle-city-a').textContent = pair.cityA.name;
+    document.getElementById('idle-city-b').textContent = pair.cityB.name;
+
+    document.getElementById('hint-reveal').classList.remove('visible');
+    document.getElementById('btn-hint').disabled = false;
+    window._hintUsed = false;
+    //JF: Set the needle to 180 rather than 0 at the start
+    setNeedle(180);
+
+    // In test mode, skip idle and go straight to playing
+    if (TEST_MODE) {
+      setState('playing');
+    } else {
+      setState('idle');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BOOT
+  // ═══════════════════════════════════════════════════════════════
+
+  function init() {
+    const pair = BDAY_MODE ? bdayCurrentPair()
+              : TEST_MODE ? getRandomPair()
+              : getTodaysPair();
+    window._pair = pair;
+
+    if (BDAY_MODE) {
+      bdaySetHeader();
+    } else {
+      document.getElementById('puzzle-num').textContent = `#${pair.puzzleNumber}`;
+    }
+    document.getElementById('target-name').textContent = pair.cityB.name.toUpperCase();
+    document.getElementById('from-name').textContent   = pair.cityA.name;
+
+    initCompass();
+    //JF: Set the needle to 180 rather than 0 at the start
+    setNeedle(180);
+
+    // Already played today? (skipped in test/bday mode)
+    const prev = getTodaysResult();
+    if (prev) { showDone(prev, pair); return; }
+
+    // First-time intro screen (skipped in test/bday mode)
+    if (!hasVisited() && !TEST_MODE && !BDAY_MODE) {
+      setState('intro');
+      document.getElementById('btn-intro-start').onclick = () => {
+        markVisited();
+        setState('idle');
+      };
+    } else if (TEST_MODE || BDAY_MODE) {
+      setState('playing');
+    } else {
+      setState('idle');
+    }
+
+    // Idle state setup
+    document.getElementById('idle-city-a').textContent = pair.cityA.name;
+    document.getElementById('idle-city-b').textContent = pair.cityB.name;
+
+    // Buttons
+    document.getElementById('btn-start').onclick = () => {
+      document.getElementById('hint-reveal').classList.remove('visible');
+      document.getElementById('btn-hint').disabled = false;
+      //JF: Set the needle to 180 rather than 0 at the start
+      setNeedle(180);
+      setState('playing');
+    };
+
+    document.getElementById('btn-submit').onclick = () => {
+      const p = window._pair;
+      const tb = calcBearing(p.cityA.lat, p.cityA.lon, p.cityB.lat, p.cityB.lon);
+      showResult(p, currentBearing, tb, angularDiff(currentBearing, tb));
+    };
+
+    //JF: Added a line break in the hint. 
+    document.getElementById('btn-hint').onclick = () => {
+      const p = window._pair;
+      const el = document.getElementById('hint-reveal');
+      el.innerHTML = `<strong>${p.cityA.name}</strong> is in <strong>${p.cityA.country}</strong>.&nbsp;
+        <p><strong>${p.cityB.name}</strong> is in <strong>${p.cityB.country}</strong>.`;
+      el.classList.add('visible');
+      document.getElementById('btn-hint').disabled = true;
+      window._hintUsed = true;
+    };
+
+    document.getElementById('btn-history').onclick = () => { renderHistory(); openModal('modal-history'); };
+    document.getElementById('btn-help').onclick    = () => openModal('modal-help');
+
+    document.querySelectorAll('[data-close]').forEach(b =>
+      b.addEventListener('click', () => closeModal(b.dataset.close))
+    );
+    document.querySelectorAll('.overlay').forEach(o =>
+      o.addEventListener('click', e => { if (e.target === o) closeModal(o.id); })
+    );
+  }
+
+  init();
+  </script>
+  <div id="lightning-overlay"></div>
+</body>
+</html>
