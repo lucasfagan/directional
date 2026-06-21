@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>How Closely Did You Read Storyworth?</title>
+<style>
+:root{
+  --bg-0:#0e1726;
+  --bg-1:#16223a;
+  --card:#1b2942;
+  --card-2:#22324f;
+  --ink:#f4f1e9;
+  --ink-dim:#aab6cc;
+  --ink-faint:#7e8aa3;
+  --gold:#e9b949;
+  --gold-deep:#caa033;
+  --green:#4cc38a;
+  --green-bg:rgba(76,195,138,.14);
+  --red:#e5645f;
+  --red-bg:rgba(229,100,95,.14);
+  --easy:#4cc38a;
+  --medium:#e9b949;
+  --hard:#e5645f;
+  --fj:#7aa2ff;
+  --fj-bg:rgba(122,162,255,.14);
+  --line:rgba(255,255,255,.08);
+  --shadow:0 18px 50px rgba(0,0,0,.45);
+  --serif:"Georgia","Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:var(--sans);color:var(--ink);
+  background:
+    radial-gradient(1200px 700px at 50% -10%, #20304f 0%, rgba(32,48,79,0) 60%),
+    linear-gradient(170deg,var(--bg-0),var(--bg-1));
+  min-height:100vh;display:flex;align-items:flex-start;justify-content:center;
+  padding:28px 18px 60px;-webkit-font-smoothing:antialiased;
+}
+.wrap{width:100%;max-width:640px;}
+
+/* ---------- panels ---------- */
+.panel{display:none;animation:rise .45s cubic-bezier(.2,.7,.3,1);}
+body[data-screen="title"]    .panel.title{display:block;}
+body[data-screen="quiz"]     .panel.quiz{display:block;}
+body[data-screen="interim"]  .panel.interim{display:block;}
+body[data-screen="wager"]    .panel.wager{display:block;}
+body[data-screen="finalq"]   .panel.finalq{display:block;}
+body[data-screen="results"]  .panel.results{display:block;}
+@keyframes rise{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+@keyframes shake{10%,90%{transform:translateX(-2px);}30%,70%{transform:translateX(4px);}50%{transform:translateX(-6px);}}
+.shake{animation:shake .4s;}
+
+/* ---------- title ---------- */
+.title{text-align:center;padding-top:24px;}
+.kicker{font-size:13px;letter-spacing:.28em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-bottom:18px;}
+.title h1{font-family:var(--serif);font-size:clamp(38px,9vw,62px);line-height:1.04;margin:0 0 6px;font-weight:700;letter-spacing:-.01em;text-wrap:balance;}
+.title h1 .em{color:var(--gold);font-style:italic;}
+.subtitle{color:var(--ink-dim);font-size:17px;line-height:1.55;max-width:440px;margin:18px auto 0;}
+.title-card{margin:34px auto 0;background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);border-radius:20px;padding:30px 26px;box-shadow:var(--shadow);max-width:480px;}
+.meta-row{display:flex;justify-content:center;gap:26px;margin-bottom:22px;}
+.meta{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.meta b{font-size:26px;font-family:var(--serif);color:var(--ink);}
+.meta span{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);}
+.name-field{margin-bottom:14px;text-align:left;}
+.name-field label{display:block;font-size:12px;letter-spacing:.04em;color:var(--ink-dim);margin-bottom:7px;font-weight:600;}
+.name-field input{
+  width:100%;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--ink);
+  border-radius:12px;padding:14px 15px;font-size:16px;font-family:var(--sans);text-align:center;
+}
+.name-field input:focus{outline:none;border-color:var(--gold);}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;width:100%;
+  background:linear-gradient(180deg,var(--gold),var(--gold-deep));color:#241c05;border:none;border-radius:13px;
+  font-size:18px;font-weight:800;letter-spacing:.01em;padding:16px 22px;cursor:pointer;
+  box-shadow:0 10px 24px rgba(233,185,73,.28);
+  transition:transform .12s ease,box-shadow .12s ease,filter .12s ease;
+}
+.btn:hover{transform:translateY(-1px);filter:brightness(1.04);}
+.btn:active{transform:translateY(0);}
+.btn:disabled{opacity:.55;cursor:default;transform:none;filter:none;}
+.btn.ghost{background:transparent;color:var(--ink-dim);border:1px solid var(--line);box-shadow:none;font-weight:700;font-size:16px;}
+.btn.ghost:hover{color:var(--ink);border-color:rgba(255,255,255,.22);}
+.btn.fj{background:linear-gradient(180deg,#8fb0ff,#5e80d8);color:#0b1430;box-shadow:0 10px 24px rgba(122,162,255,.3);}
+.scoring-note{margin-top:14px;font-size:12.5px;color:var(--ink-faint);line-height:1.6;}
+.scoring-note b{color:var(--ink-dim);}
+
+/* ---------- quiz / final question ---------- */
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.progress-label{font-size:13px;color:var(--ink-faint);font-weight:600;letter-spacing:.04em;}
+.progress-label b{color:var(--ink-dim);}
+.score-pill{font-size:13px;font-weight:700;color:var(--gold);background:rgba(233,185,73,.12);border:1px solid rgba(233,185,73,.25);padding:5px 12px;border-radius:999px;}
+.bar{height:6px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden;margin-bottom:22px;}
+.bar > i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,var(--gold-deep),var(--gold));transition:width .4s cubic-bezier(.2,.7,.3,1);}
+.qcard{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);border-radius:20px;padding:24px 22px 22px;box-shadow:var(--shadow);}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.badge{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:5px 11px;border-radius:999px;border:1px solid transparent;}
+.badge.easy{color:var(--easy);background:var(--green-bg);border-color:rgba(76,195,138,.3);}
+.badge.medium{color:var(--medium);background:rgba(233,185,73,.12);border-color:rgba(233,185,73,.3);}
+.badge.hard{color:var(--hard);background:var(--red-bg);border-color:rgba(229,100,95,.3);}
+.badge.final{color:var(--fj);background:var(--fj-bg);border-color:rgba(122,162,255,.35);}
+.story-ref{
+  display:flex;flex-direction:column;gap:5px;margin-bottom:18px;
+  background:rgba(233,185,73,.09);border:1px solid rgba(233,185,73,.24);
+  border-left:4px solid var(--gold);border-radius:11px;padding:12px 15px;
+}
+.story-ref .lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:800;}
+.story-ref .txt{font-style:italic;color:var(--ink);font-size:15.5px;line-height:1.42;}
+.story-ref.fj{background:var(--fj-bg);border-color:rgba(122,162,255,.3);border-left-color:var(--fj);}
+.story-ref.fj .lbl{color:var(--fj);}
+.qtext{font-family:var(--serif);font-size:clamp(21px,4.6vw,26px);line-height:1.35;margin:14px 0 22px;font-weight:600;text-wrap:pretty;}
+.choices{display:flex;flex-direction:column;gap:11px;}
+.choice{display:flex;align-items:center;gap:13px;text-align:left;width:100%;background:rgba(255,255,255,.035);border:1px solid var(--line);color:var(--ink);border-radius:13px;padding:15px 16px;font-size:16px;line-height:1.35;cursor:pointer;transition:background .12s ease,border-color .12s ease,transform .08s ease;}
+.choice:hover:not(:disabled){background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.2);}
+.choice:active:not(:disabled){transform:scale(.99);}
+.choice:disabled{cursor:default;}
+.choice .key{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:14px;background:rgba(255,255,255,.08);color:var(--ink-dim);transition:background .12s ease,color .12s ease;}
+.choice .ctext{flex:1;}
+.choice .mark{flex:none;font-size:18px;opacity:0;transition:opacity .15s ease;}
+.choice.correct{background:var(--green-bg);border-color:var(--green);}
+.choice.correct .key{background:var(--green);color:#06281a;}
+.choice.correct .mark{opacity:1;color:var(--green);}
+.choice.wrong{background:var(--red-bg);border-color:var(--red);}
+.choice.wrong .key{background:var(--red);color:#2c0a09;}
+.choice.wrong .mark{opacity:1;color:var(--red);}
+.choice.dim{opacity:.5;}
+.reveal{margin-top:18px;border-top:1px solid var(--line);padding-top:16px;display:none;}
+.reveal.show{display:block;animation:rise .3s ease;}
+.verdict{font-weight:800;font-size:16px;margin-bottom:4px;}
+.verdict.right{color:var(--green);}
+.verdict.nope{color:var(--red);}
+.reveal .ans{color:var(--ink-dim);font-size:15px;line-height:1.5;}
+.reveal .ans b{color:var(--ink);}
+.next-row{margin-top:18px;}
+
+/* ---------- interim / results shared ---------- */
+.centered{text-align:center;padding-top:18px;}
+.centered .kicker{margin-bottom:14px;}
+.score-big{font-family:var(--serif);font-size:clamp(58px,16vw,96px);line-height:1;font-weight:700;color:var(--gold);margin:6px 0 0;}
+.score-big small{font-size:.38em;color:var(--ink-faint);font-weight:400;}
+.score-sub{font-size:14px;color:var(--ink-faint);margin-top:6px;letter-spacing:.02em;}
+.rank{font-family:var(--serif);font-size:26px;margin:16px 0 6px;font-weight:700;}
+.rank-msg{color:var(--ink-dim);font-size:16px;line-height:1.55;max-width:440px;margin:0 auto 24px;}
+
+/* leaderboard / standings */
+.lb{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);border-radius:18px;padding:18px 16px 14px;margin:0 auto 22px;max-width:480px;box-shadow:var(--shadow);}
+.lb-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.lb-title{font-family:var(--serif);font-size:19px;font-weight:700;}
+.lb-refresh{background:transparent;border:1px solid var(--line);color:var(--ink-dim);font-size:13px;font-weight:600;border-radius:999px;padding:6px 13px;cursor:pointer;transition:color .12s,border-color .12s;}
+.lb-refresh:hover{color:var(--ink);border-color:rgba(255,255,255,.22);}
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:10px;margin:6px 0 18px;min-height:150px;}
+.pod{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;max-width:120px;}
+.pod .medal{font-size:26px;line-height:1;}
+.pod .pname{font-size:13px;font-weight:700;color:var(--ink);text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pod .ppts{font-size:12px;color:var(--ink-faint);font-weight:600;}
+.pod .block{width:100%;border-radius:11px 11px 4px 4px;display:flex;align-items:flex-start;justify-content:center;padding-top:8px;font-family:var(--serif);font-size:22px;font-weight:700;color:#241c05;}
+.pod.first  .block{height:108px;background:linear-gradient(180deg,#f4cf5e,#caa033);}
+.pod.second .block{height:80px; background:linear-gradient(180deg,#cfd6e2,#9aa6bb);}
+.pod.third  .block{height:60px; background:linear-gradient(180deg,#e0a777,#bb8350);}
+.pod.empty .block{background:rgba(255,255,255,.06);color:var(--ink-faint);}
+.pod.empty .medal{opacity:.4;}
+.lb-list{display:flex;flex-direction:column;}
+.lb-row{display:flex;align-items:center;gap:12px;padding:10px 6px;border-top:1px solid var(--line);font-size:14px;}
+.lb-list .lb-row:first-child{border-top:none;}
+.lb-row .rk{width:24px;flex:none;color:var(--ink-faint);font-weight:700;text-align:center;}
+.lb-row .nm{flex:1;color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lb-row .pt{flex:none;font-weight:700;color:var(--ink);}
+.lb-row.me{background:rgba(233,185,73,.1);border-radius:9px;}
+.lb-row.me .nm{color:var(--gold);font-weight:700;}
+.lb-total{margin-top:12px;font-size:13px;color:var(--ink-faint);}
+.lb-empty{color:var(--ink-faint);font-size:14px;padding:14px 0;}
+.wait-note{font-size:13px;color:var(--ink-faint);margin:0 auto 16px;max-width:440px;line-height:1.6;}
+
+/* per-question breakdown */
+#qBreakdown{text-align:left;}
+.qb{padding:14px 4px;border-top:1px solid var(--line);}
+#qBreakdown .qb:first-child{border-top:none;padding-top:4px;}
+.qb-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+.qb-stat{font-size:13px;font-weight:700;color:var(--ink-dim);}
+.qb-meter{height:5px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden;margin-bottom:11px;}
+.qb-meter > i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--green),#7be0ad);}
+.qb-q{font-size:14px;line-height:1.42;color:var(--ink);margin-bottom:11px;font-weight:600;}
+.qb-names{display:flex;flex-wrap:wrap;gap:6px;}
+.who{font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;}
+.who.right{color:var(--green);background:var(--green-bg);}
+.who.wrong{color:var(--red);background:var(--red-bg);}
+
+/* wager */
+.wager{text-align:center;padding-top:18px;}
+.fj-title{font-family:var(--serif);font-size:clamp(28px,6vw,38px);margin:8px 0 18px;font-weight:700;}
+.fj-story{background:var(--fj-bg);border:1px solid rgba(122,162,255,.3);border-radius:14px;padding:16px 18px;max-width:480px;margin:0 auto 20px;font-style:italic;color:var(--ink);line-height:1.45;}
+.fj-story .lbl{display:block;font-style:normal;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--fj);font-weight:800;margin-bottom:7px;}
+.wager-card{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);border-radius:18px;padding:24px 22px;max-width:480px;margin:0 auto;box-shadow:var(--shadow);}
+.wager-have{font-size:16px;color:var(--ink-dim);margin-bottom:18px;}
+.wager-have b{color:var(--gold);font-size:22px;font-family:var(--serif);}
+.wager-quick{display:flex;gap:9px;margin-bottom:14px;}
+.wager-quick button{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--ink-dim);border-radius:11px;padding:11px 6px;font-size:13px;font-weight:700;cursor:pointer;transition:.12s;}
+.wager-quick button:hover{color:var(--ink);border-color:rgba(255,255,255,.25);}
+.wager-input-row{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:8px;}
+.wager-input-row input{width:130px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:14px;font-size:24px;font-family:var(--serif);font-weight:700;text-align:center;}
+.wager-input-row input:focus{outline:none;border-color:var(--fj);}
+.wager-input-row span{font-size:14px;color:var(--ink-faint);}
+.wager-hint{font-size:13px;color:var(--ink-faint);line-height:1.5;margin:10px 0 18px;}
+.wager-err{color:var(--red);font-size:13px;font-weight:600;margin-top:12px;min-height:16px;}
+
+/* breakdown */
+.breakdown{background:linear-gradient(180deg,var(--card),var(--card-2));border:1px solid var(--line);border-radius:18px;padding:8px 6px;margin:0 auto 24px;max-width:480px;box-shadow:var(--shadow);text-align:left;}
+.brow{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);}
+.brow:last-child{border-bottom:none;}
+.brow .ico{flex:none;font-size:16px;line-height:1.4;}
+.brow .bq{flex:1;font-size:14px;line-height:1.45;color:var(--ink-dim);}
+.brow .bq b{color:var(--ink);font-weight:600;}
+.brow .bq .corr{color:var(--ink-faint);}
+.actions{display:flex;flex-direction:column;gap:11px;max-width:480px;margin:0 auto;}
+.hint-note{margin-top:30px;font-size:12px;color:var(--ink-faint);line-height:1.6;}
+
+.confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:5;}
+.confetti i{position:absolute;top:-12px;width:9px;height:14px;opacity:.9;animation:fall linear forwards;}
+@keyframes fall{to{transform:translateY(108vh) rotate(540deg);opacity:.85;}}
+
+@media (max-width:480px){
+  .meta-row{gap:18px;}
+  .title-card,.qcard,.wager-card{padding:22px 17px;}
+}
+</style>
+</head>
+<body data-screen="title">
+<div class="confetti" id="confetti"></div>
+<div class="wrap">
+
+  <!-- ===== TITLE ===== -->
+  <section class="panel title">
+    <div class="kicker">Happy Father&rsquo;s Day &bull; Est. 2026</div>
+    <h1>How Closely Did<br>You Read <span class="em">Storyworth?</span></h1>
+    <p class="subtitle">A quiz on the stories J-Dawg has written for his Storyworth.
+      You&rsquo;ve read them&hellip; but how much actually <i>stuck</i>?</p>
+    <div class="title-card">
+      <div class="meta-row">
+        <div class="meta"><b id="meta-q">&mdash;</b><span>Questions</span></div>
+        <div class="meta"><b id="meta-stories">&mdash;</b><span>Stories</span></div>
+        <div class="meta"><b id="meta-pts">&mdash;</b><span>Points</span></div>
+      </div>
+      <div class="name-field">
+        <label for="startName">First, who&rsquo;s playing?</label>
+        <input id="startName" placeholder="Your name" maxlength="24" autocomplete="off">
+      </div>
+      <button class="btn" onclick="startQuiz()">Begin Quiz &rarr;</button>
+      <div class="scoring-note">Correct answers score by difficulty:
+        <b>Easy 1</b> &bull; <b>Medium 2</b> &bull; <b>Hard 3</b>. Then it all comes down to Final Jeopardy.</div>
+    </div>
+  </section>
+
+  <!-- ===== QUIZ ===== -->
+  <section class="panel quiz">
+    <div class="topbar">
+      <span class="progress-label" id="prog">Question 1</span>
+      <span class="score-pill" id="scorePill">0 pts</span>
+    </div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="qcard">
+      <div class="badges" id="badges"></div>
+      <div class="story-ref" id="storyRow"><span class="lbl">📖 From the Storyworth</span><span class="txt" id="storyRef"></span></div>
+      <div class="qtext" id="qtext"></div>
+      <div class="choices" id="choices"></div>
+      <div class="reveal" id="reveal">
+        <div class="verdict" id="verdict"></div>
+        <div class="ans" id="ansLine"></div>
+        <div class="next-row"><button class="btn" id="nextBtn" onclick="nextQuestion()">Next &rarr;</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== INTERIM STANDINGS ===== -->
+  <section class="panel interim centered">
+    <div class="kicker">Round One Complete</div>
+    <div class="score-big"><span id="interimScore">0</span><small id="interimOf">/0</small></div>
+    <div class="score-sub" id="interimSub"></div>
+    <p class="wait-note">Hang tight and <b>wait for everyone</b> to finish round one. Scores roll in below &mdash; hit refresh to watch them land. When the whole family is ready, head to Final Jeopardy together.</p>
+    <div class="lb">
+      <div class="lb-head">
+        <span class="lb-title">Who&rsquo;s Finished</span>
+        <button class="lb-refresh" onclick="loadInterim()">&#8635; Refresh</button>
+      </div>
+      <div class="lb-list" id="standList"></div>
+      <div class="lb-total" id="standTotal"></div>
+    </div>
+    <div class="lb">
+      <div class="lb-head">
+        <span class="lb-title">Question Breakdown</span>
+        <button class="lb-refresh" onclick="loadInterim()">&#8635; Refresh</button>
+      </div>
+      <div id="qBreakdown"></div>
+      <div class="lb-total">Sorted hardest first &mdash; who got each one right and wrong.</div>
+    </div>
+    <div class="actions"><button class="btn fj" onclick="goFinalJeopardy()">Move to Final Jeopardy &rarr;</button></div>
+  </section>
+
+  <!-- ===== FINAL JEOPARDY: WAGER ===== -->
+  <section class="panel wager">
+    <div class="kicker" style="color:var(--fj)">Final Jeopardy</div>
+    <h2 class="fj-title">Place Your Wager</h2>
+    <div class="fj-story">
+      <span class="lbl">This question comes from</span>
+      <span id="fjStory"></span>
+    </div>
+    <div class="wager-card">
+      <div class="wager-have">You have <b id="wHave">0</b> points to wager.</div>
+      <div class="wager-quick">
+        <button onclick="setWager(0)">None</button>
+        <button onclick="setWager('half')">Half</button>
+        <button onclick="setWager('all')">All in</button>
+      </div>
+      <div class="wager-input-row">
+        <input id="wagerInput" type="number" min="0" step="1" value="0" inputmode="numeric">
+        <span>pts</span>
+      </div>
+      <div class="wager-hint">Answer correctly and your wager is <b>added</b> to your score. Miss it and it&rsquo;s <b>subtracted</b>. Wager anything from 0 up to everything you&rsquo;ve got.</div>
+      <button class="btn fj" onclick="lockWager()">Lock It In &rarr;</button>
+      <div class="wager-err" id="wagerErr"></div>
+    </div>
+  </section>
+
+  <!-- ===== FINAL JEOPARDY: QUESTION ===== -->
+  <section class="panel finalq">
+    <div class="topbar">
+      <span class="progress-label">Wager: <b id="fqWager">0</b> pts</span>
+      <span class="score-pill" id="fqPoints">0 pts</span>
+    </div>
+    <div class="qcard">
+      <div class="badges"><span class="badge final">Final Jeopardy</span></div>
+      <div class="story-ref fj"><span class="lbl">📖 From the Storyworth</span><span class="txt" id="fqStoryRef"></span></div>
+      <div class="qtext" id="fqText"></div>
+      <div class="choices" id="fqChoices"></div>
+      <div class="reveal" id="fqReveal">
+        <div class="verdict" id="fqVerdict"></div>
+        <div class="ans" id="fqAnsLine"></div>
+        <div class="next-row"><button class="btn fj" onclick="showResults()">Reveal Final Standings &rarr;</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FINAL RESULTS ===== -->
+  <section class="panel results centered">
+    <div class="kicker">Final Standings</div>
+    <div class="score-big" id="finalScore">0</div>
+    <div class="score-sub" id="scoreSub"></div>
+    <div class="rank" id="rankTitle"></div>
+    <p class="rank-msg" id="rankMsg"></p>
+    <div class="lb">
+      <div class="lb-head">
+        <span class="lb-title">🏆 The Podium</span>
+        <button class="lb-refresh" onclick="loadLeaderboard()">&#8635; Refresh</button>
+      </div>
+      <div class="podium" id="podium"></div>
+      <div class="lb-list" id="lbList"></div>
+      <div class="lb-total" id="lbTotal"></div>
+    </div>
+    <div class="breakdown" id="breakdown"></div>
+    <div class="actions"><button class="btn ghost" onclick="restart()">Play Again &#8635;</button></div>
+    <div class="hint-note">Made with love for J-Dawg. &mdash; the family</div>
+  </section>
+
+</div>
+
+<script>
+/* =========================================================================
+   QUESTIONS  — round one
+   -------------------------------------------------------------------------
+     story      : the Storyworth prompt he was answering (shown as "Story")
+     difficulty : "easy" | "medium" | "hard"   (worth 1 / 2 / 3 points)
+     question   : shown to the player (a fill-in-the-blank with ____ works too)
+     answer     : the CORRECT answer
+     wrong      : array of 3 plausible fake answers
+   Choices shuffle automatically. Order below = quiz order.
+   The samples below are PLACEHOLDERS — replace with real ones.
+   ========================================================================= */
+const QUESTIONS = [
+  {
+    // meta question — no single source story, so the "Story" line is omitted
+    difficulty: "medium",
+    question: "What was the very first Storyworth story J-Dawg wrote?",
+    answer: "What did you like most about Beatrice when you first met her?",
+    wrong: [
+      "What's a small decision you made that ended up having a big impact on your life?",
+      "What activities bring you the most joy?",
+      "Can you share a favorite memory of playing or coaching sports with your kids?"
+    ]
+  },
+  {
+    story: "What did you like most about Beatrice when you first met her?",
+    difficulty: "medium",
+    question: "J-Dawg and Trixie both taught at Hudson Catholic. But where did he first lay eyes on her?",
+    answer: "The school cafeteria",
+    wrong: ["In her classroom", "In his classroom", "The teachers' lounge"]
+  },
+  {
+    story: "How would you describe the neighborhood where you grew up?",
+    difficulty: "easy",
+    question: "Which of these street games did J-Dawg NOT mention playing with his friends growing up?",
+    answer: "Stickball",
+    wrong: ["Street hockey", "Skateboarding", "Kickball"]
+  },
+  {
+    story: "How would you describe your grandparents?",
+    difficulty: "hard",
+    question: "Where in Italy were the Manocchios from?",
+    answer: "Campobasso",
+    wrong: ["Avellino", "Benevento", "Salerno"]
+  },
+  {
+    story: "How would you describe your grandparents?",
+    difficulty: "medium",
+    question: "When Giovanni applied to become a U.S. citizen, what notable mistake did he make on the paperwork?",
+    answer: "He forgot to list one of his children",
+    wrong: [
+      "He misspelled Manocchio",
+      "He got the year he arrived in America wrong",
+      "He failed the citizenship test and had to retake it"
+    ]
+  },
+  {
+    story: "What do you admire most about your mother?",
+    difficulty: "easy",
+    question: "According to Grandma, you should never leave the house without what?",
+    answer: "A sandwich",
+    wrong: ["A few dollars in your pocket", "A clean handkerchief", "A jacket"]
+  },
+  {
+    story: "What do you admire most about your mother?",
+    difficulty: "medium",
+    question: "At what age did Grandma get her first iPhone?",
+    answer: "93",
+    wrong: ["85", "89", "96"]
+  },
+  {
+    story: "What do you admire most about your mother?",
+    difficulty: "hard",
+    question: "What book did J-Dawg mention that Grandma read in a Fairleigh Dickinson class?",
+    answer: "Cat's Cradle by Kurt Vonnegut",
+    wrong: [
+      "One Flew Over the Cuckoo's Nest by Ken Kesey",
+      "A Clockwork Orange by Anthony Burgess",
+      "On the Road by Jack Kerouac"
+    ]
+  },
+  {
+    story: "What have been some of your life's greatest surprises?",
+    difficulty: "medium",
+    question: "Which game did J-Dawg mention trying out at his cousin's in the late 1970s?",
+    answer: "Pong",
+    wrong: ["Space Invaders", "Asteroids", "Pac-Man"]
+  },
+  {
+    story: "What have been some of your life's greatest surprises?",
+    difficulty: "medium",
+    question: "Which of these was NOT one of J-Dawg's bullet points for his life's greatest surprises?",
+    answer: "The kindness of strangers",
+    wrong: ["Friends for life", "Living this long", "Life goes by fast"]
+  },
+  {
+    story: "When did you first feel like an adult?",
+    difficulty: "hard",
+    question: "When did J-Dawg get his driver's license?",
+    answer: "A couple weeks after his 17th birthday",
+    wrong: [
+      "A couple months after his 16th birthday",
+      "On his 17th birthday",
+      "On his 16th birthday"
+    ]
+  },
+  {
+    story: "What was your wedding like?",
+    difficulty: "medium",
+    question: "What did J-Dawg do the Friday before his wedding?",
+    answer: "Played golf",
+    wrong: ["Played tennis", "Played in a softball game", "Went fishing"]
+  },
+  {
+    story: "What was your wedding like?",
+    difficulty: "medium",
+    question: "What did J-Dawg do on the morning of his wedding?",
+    answer: "Played tennis",
+    wrong: ["Played golf", "Played in a softball game", "Went fishing"]
+  },
+  {
+    story: "What was your wedding like?",
+    difficulty: "hard",
+    question: "Which of these did J-Dawg NOT mention as something they did on their honeymoon?",
+    answer: "A sunset luau",
+    wrong: [
+      "A catamaran ride",
+      "A hike to a secluded waterfall",
+      "Hiking the crater at Hawaii Volcanoes National Park"
+    ]
+  },
+  {
+    story: "What advice would you give to future generations in your family?",
+    difficulty: "medium",
+    question: "Which of these was NOT advice J-Dawg gave?",
+    answer: "Stay curious",
+    wrong: ["Listen", "Practice gratitude", "Have a plan"]
+  },
+  {
+    story: "What was your first job?",
+    difficulty: "hard",
+    question: "When he was a newspaper deliveryman for the Star-Ledger, when did he mention he would not ride his bike?",
+    answer: "On Sundays",
+    wrong: ["When it was raining", "In the winter", "On holidays"]
+  },
+  {
+    story: "What was your first job?",
+    difficulty: "easy",
+    question: "When J-Dawg quit Pathmark, where did he work?",
+    answer: "Sears",
+    wrong: ["JCPenney", "Montgomery Ward", "Kmart"]
+  },
+  {
+    story: "What was your first job?",
+    difficulty: "medium",
+    question: "At Pathmark, J-Dawg earned recognition as a top cashier. What was the status called?",
+    answer: "Gold badge cashier",
+    wrong: ["Silver badge cashier", "Platinum badge cashier", "Star badge cashier"]
+  },
+  {
+    story: "How was growing up in the 1970s different than growing up in the 2000s?",
+    difficulty: "hard",
+    question: "Which of these did J-Dawg NOT mention as a difference between growing up in the 1970s and the 2000s?",
+    answer: "The cost of things",
+    wrong: ["Music", "Phone calls", "Playing outside unsupervised"]
+  },
+  {
+    story: "What are you proudest of in your life?",
+    difficulty: "easy",
+    question: "Which child did J-Dawg say reminds him of himself — \"and only the GOOD parts of me\"?",
+    answer: "Isabelle",
+    wrong: ["Lucas", "Curtis", "Sabrina"]
+  },
+  {
+    story: "What's the first major news story you can remember living through as a child?",
+    difficulty: "easy",
+    question: "What does J-Dawg name as the first major news story he remembers living through as a child?",
+    answer: "When Reagan was shot",
+    wrong: ["The fall of the Berlin Wall", "Nixon's resignation", "The Challenger explosion"]
+  },
+  {
+    story: "What's the first major news story you can remember living through as a child?",
+    difficulty: "medium",
+    question: "Which of these did J-Dawg NOT mention as a news story he remembers from his childhood?",
+    answer: "Three Mile Island",
+    wrong: ["The Iran hostage crisis", "The end of the Vietnam War", "The Apollo missions"]
+  },
+  {
+    story: "What's one of the most beautiful places you've ever been?",
+    difficulty: "medium",
+    question: "Which of these did J-Dawg NOT list as one of the most beautiful places he's been?",
+    answer: "Glacier National Park",
+    wrong: ["Death Valley", "The Grand Tetons", "Crater Lake"]
+  },
+  {
+    story: "What song always brings back a particular memory?",
+    difficulty: "hard",
+    question: "Songs (1 of 3): Which of these did J-Dawg NOT mention as a song that brings back a memory?",
+    answer: "Hotel California",
+    wrong: ["Private Idaho", "Fight for Your Right (To Party)", "Paradise by the Dashboard Light"]
+  },
+  {
+    story: "What song always brings back a particular memory?",
+    difficulty: "easy",
+    question: "Songs (2 of 3): Which of these did J-Dawg NOT mention as a song that brings back a memory?",
+    answer: "Mr. Brightside",
+    wrong: ["Light Em Up", "This Is Radio Clash", "All I Want for Christmas Is You"]
+  },
+  {
+    story: "What song always brings back a particular memory?",
+    difficulty: "easy",
+    question: "Songs (3 of 3): Which of these did J-Dawg NOT mention as a song that brings back a memory?",
+    answer: "Call Me Maybe",
+    wrong: ["My Only Wish", "Since U Been Gone", "The A Team"]
+  },
+  {
+    story: "What was your dad like when you were a child?",
+    difficulty: "hard",
+    question: "Where did George meet Gloria?",
+    answer: "The Carroll Club",
+    wrong: ["The Columbus Club", "The Loyola Club", "The Newman Club"]
+  },
+  {
+    story: "What was your dad like when you were a child?",
+    difficulty: "hard",
+    question: "Where did George work for his career as an underwriter?",
+    answer: "Continental Insurance",
+    wrong: ["The Hartford", "Prudential", "Aetna"]
+  },
+  {
+    story: "What was your dad like when you were a child?",
+    difficulty: "hard",
+    question: "J-Dawg wrote that George never wore shorts except for tennis and ____.",
+    answer: "Swimming",
+    wrong: ["Golf", "Yard work", "The beach"]
+  },
+  {
+    story: "What was your dad like when you were a child?",
+    difficulty: "easy",
+    question: "Which of these is NOT one of the ways J-Dawg described George?",
+    answer: "Quick with a joke",
+    wrong: ["Gentle and kind", "Serious and sober", "Politically conservative"]
+  },
+  {
+    story: "Describe one of your most memorable birthdays.",
+    difficulty: "medium",
+    question: "Which birthday did J-Dawg describe as one of his most memorable?",
+    answer: "His 40th",
+    wrong: ["His 18th", "His 30th", "His 50th"]
+  },
+  // ORDERING CONSTRAINT: this question must appear AFTER the "Which birthday did
+  // J-Dawg describe" question above — it reveals the answer was his 40th.
+  {
+    story: "Describe one of your most memorable birthdays.",
+    difficulty: "hard",
+    question: "What was one of the signs that tipped J-Dawg off about his surprise 40th birthday party?",
+    answer: "He found cups in the trunk of the car",
+    wrong: [
+      "He overheard a hushed phone call",
+      "He found party decorations hidden in a closet",
+      "Relatives suddenly came to town"
+    ]
+  },
+  {
+    story: "If you had to go back in time and start a brand new career, what would it be?",
+    difficulty: "medium",
+    question: "Which of these did J-Dawg NOT mention as something he might have studied in a brand-new career?",
+    answer: "Computer science",
+    wrong: ["Economics", "Business", "Electrical engineering"]
+  },
+  {
+    story: "What's a small decision you made that ended up having a big impact on your life?",
+    difficulty: "easy",
+    question: "What small decision does J-Dawg say ended up having a big impact on his life?",
+    answer: "Completing his student housing application for Rutgers",
+    wrong: [
+      "Signing up for a particular elective",
+      "Taking a summer job at the shore",
+      "Joining an intramural team"
+    ]
+  },
+  {
+    story: "What's a small decision you made that ended up having a big impact on your life?",
+    difficulty: "hard",
+    question: "What dorm did J-Dawg live in his freshman year?",
+    answer: "Wessels",
+    wrong: ["Hardenbergh", "Frelinghuysen", "Leupp"]
+  },
+  {
+    story: "What's a small decision you made that ended up having a big impact on your life?",
+    difficulty: "medium",
+    question: "What was special about the freshman dorm J-Dawg lived in?",
+    answer: "It was the only all-guys dorm",
+    wrong: [
+      "It was the oldest dorm on campus",
+      "It was the honors dorm",
+      "It had its own dining hall"
+    ]
+  },
+  {
+    story: "What's a small decision you made that ended up having a big impact on your life?",
+    difficulty: "hard",
+    question: "Which of these was NOT part of the original group in J-Dawg's freshman dorm?",
+    answer: "Butthead",
+    wrong: ["Huu", "Marcel", "Fritz"]
+  },
+  {
+    story: "What is one of your earliest childhood memories?",
+    difficulty: "easy",
+    question: "At Niagara Falls, what does J-Dawg remember happening to him along the river?",
+    answer: "He got left behind and cried until his parents came back",
+    wrong: [
+      "He dropped his ice cream in the river",
+      "He got soaked by the falls",
+      "He lost a shoe"
+    ]
+  },
+  {
+    story: "What is one of your earliest childhood memories?",
+    difficulty: "easy",
+    question: "On the Niagara Falls boat ride, a girl said something young J-Dawg couldn't understand. What did he later decide she had been speaking?",
+    answer: "French",
+    wrong: ["Spanish", "Italian", "German"]
+  },
+  {
+    story: "What is one of your earliest childhood memories?",
+    difficulty: "easy",
+    question: "What would Grandma have young J-Dawg do while they lay on her bed after school?",
+    answer: "Solve math problems",
+    wrong: ["Practice spelling words", "Read aloud to her", "Work on riddles"]
+  },
+  {
+    story: "What is one of your earliest childhood memories?",
+    difficulty: "easy",
+    question: "Watching the bridal party at his cousin Anne's wedding, what funny thing did young J-Dawg wonder?",
+    answer: "How many couples were getting married that day",
+    wrong: ["Whether he'd have to dance", "If there would be cake", "Why the bride wore white"]
+  },
+  {
+    story: "What's a special moment that happened during a family trip?",
+    difficulty: "easy",
+    question: "What is missing from Mackinac Island, Michigan?",
+    answer: "Cars",
+    wrong: ["Paved roads", "Cell service", "Streetlights"]
+  },
+  {
+    story: "What's a special moment that happened during a family trip?",
+    difficulty: "easy",
+    question: "In San Diego, we went kayaking with what?",
+    answer: "Sharks",
+    wrong: ["Sea lions", "Dolphins", "Whales"]
+  },
+  {
+    story: "What's a special moment that happened during a family trip?",
+    difficulty: "easy",
+    question: "At Lake Louise, what movie did we watch for Sabrina's birthday?",
+    answer: "Avatar",
+    wrong: ["Titanic", "Up", "The Hangover"]
+  },
+  {
+    story: "What's a special moment that happened during a family trip?",
+    difficulty: "easy",
+    question: "We watched Duke crush which team at the Continental Airlines Arena?",
+    answer: "Texas",
+    wrong: ["UNC", "Kentucky", "UConn"]
+  },
+  {
+    story: "What activities bring you the most joy?",
+    difficulty: "easy",
+    question: "Which of these did J-Dawg NOT mention as something he enjoyed doing with us?",
+    answer: "Playing board games",
+    wrong: ["Teaching us to bike", "Building Thomas train track", "Reading books before bed"]
+  },
+  {
+    story: "What activities bring you the most joy?",
+    difficulty: "medium",
+    question: "Which of these did J-Dawg NOT mention anywhere in his answer about what brings him joy?",
+    answer: "Composting",
+    wrong: ["Stretching", "Playing hockey", "Travel"]
+  },
+  {
+    story: "Can you share a favorite memory of playing or coaching sports with your kids?",
+    difficulty: "easy",
+    question: "What did one of the kids famously protest while learning to ski?",
+    answer: "\"I don't wanna do a blue square\"",
+    wrong: ["\"I don't wanna ride the lift\"", "\"My feet are too cold\"", "\"I wanna go on the black diamond\""]
+  },
+  {
+    story: "Can you share a favorite memory of playing or coaching sports with your kids?",
+    difficulty: "easy",
+    question: "J-Dawg wrote about one of Curtis's birthday parties. What sport was it built around?",
+    answer: "Curling",
+    wrong: ["Bowling", "Archery", "Fencing"]
+  },
+  {
+    story: "What did you like most about Beatrice when you first met her?",
+    difficulty: "medium",
+    question: "Which of these did J-Dawg NOT mention about when he first saw Trixie?",
+    answer: "Her shoes",
+    wrong: ["Her lips", "Her leggings", "Her t-shirt"]
+  }
+];
+
+/* =========================================================================
+   FINAL JEOPARDY — one question. The story is revealed BEFORE the wager.
+   ========================================================================= */
+const FINAL = {
+  story: "What is one of your earliest childhood memories?",
+  question: "While we all know J-Dawg as the prolific author of bestsellers such as The House that Luke Built, his first book never received such national recognition (and was never published). What was this book about?",
+  answer: "How to become a professional baseball player",
+  wrong: ["How to build the perfect treehouse", "How to train your dog to do tricks", "How to become an astronaut"]
+};
+
+/* ---------- one-time frozen shuffle of the round-one questions ----------
+   A fixed seed means the order is scrambled once and then identical for every
+   player on every device (which the per-question breakdown relies on), rather
+   than the order they were authored in. Two ordering constraints are re-applied
+   afterward so dependent questions still land in a sensible order. */
+(function shuffleQuestionsOnce(){
+  let s = 20260621 >>> 0;                       // fixed seed = frozen order
+  const rnd = () => {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  for (let i = QUESTIONS.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [QUESTIONS[i], QUESTIONS[j]] = [QUESTIONS[j], QUESTIONS[i]];
+  }
+  // Constraint: the "surprise 40th party signs" question must come AFTER the
+  // "which birthday did he describe" question — it gives away the 40th.
+  const bi = QUESTIONS.findIndex(q => q.question.startsWith("Which birthday did J-Dawg describe"));
+  const pi = QUESTIONS.findIndex(q => q.question.startsWith("What was one of the signs that tipped"));
+  if (bi > -1 && pi > -1 && pi < bi) {
+    [QUESTIONS[bi], QUESTIONS[pi]] = [QUESTIONS[pi], QUESTIONS[bi]];
+  }
+  // Tidy-up: keep the three "Songs (n of 3)" questions in relative 1-2-3 order.
+  const songSlots = [];
+  QUESTIONS.forEach((q, i) => { if (q.question.startsWith("Songs (")) songSlots.push(i); });
+  if (songSlots.length === 3) {
+    const ordered = songSlots.map(i => QUESTIONS[i]).sort((a, b) => a.question.localeCompare(b.question));
+    songSlots.slice().sort((a, b) => a - b).forEach((slot, k) => { QUESTIONS[slot] = ordered[k]; });
+  }
+})();
+
+const POINTS = { easy:1, medium:2, hard:3 };
+
+/* ---------- shared leaderboard (reuses Directional's Supabase) ---------- */
+const SUPABASE_URL = 'https://qnlzjddurxpfszhitreb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_s0MLm4hC1PUsCwAK4HszUg_lLCQWmau';
+const FD_DAY_INDEX = 777777;       // namespace for father's-day quiz rows
+const LS_KEY = 'fathersday_quiz_v1';
+const STATE_KEY = 'fathersday_progress_v1';   // in-progress game snapshot (survives refresh)
+
+/* ---------- ranks by % of points earned (vs round-one max) ---------- */
+const RANKS = [
+  {min:100, title:"Honorary Biographer",  msg:"You didn't just read the Storyworths — you absorbed them. J-Dawg would be proud (and a little suspicious)."},
+  {min:80,  title:"Devoted Reader",       msg:"You clearly hung on his every word. A few slipped by, but you know this man's story cold."},
+  {min:60,  title:"Attentive Kid",        msg:"Solid. You remember the big stuff — maybe skim a little less next time."},
+  {min:40,  title:"Skimmer, Caught Red-Handed", msg:"You got the gist, but J-Dawg put real detail in there and some floated right past you."},
+  {min:20,  title:"Wait, He Wrote Those?", msg:"Time for a re-read — there are some great stories you've been missing."},
+  {min:0,   title:"Did You Even Open The Email?", msg:"It's the thought that counts. Go call the man and have him tell you in person."}
+];
+
+/* ---------- state ---------- */
+let playerName = "";
+let order = [];
+let idx = 0;
+let points = 0;
+let correctCount = 0;
+let answered = [];
+let wager = 0;
+let finalCorrect = false;
+let finalPoints = 0;
+let finalOrder = [];
+let finalPicked = -1;
+let curPicked = -1;          // choice index picked on the current quiz question (-1 = unanswered)
+let finalRevealed = false;   // has the final-jeopardy answer been revealed
+const MAX_POINTS = QUESTIONS.reduce((s,q)=>s+(POINTS[q.difficulty]||1),0);
+
+/* ---------- utils ---------- */
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function loadSaved(){try{return JSON.parse(localStorage.getItem(LS_KEY)||"null");}catch{return null;}}
+function saveLocal(p){const cur=loadSaved()||{};try{localStorage.setItem(LS_KEY,JSON.stringify({...cur,...p}));}catch{}}
+
+/* ---------- progress persistence (survives a page refresh) ---------- */
+function saveState(){
+  try{
+    localStorage.setItem(STATE_KEY, JSON.stringify({
+      screen: document.body.dataset.screen,
+      playerName, idx, points, correctCount, answered, order, curPicked,
+      wager, finalOrder, finalPicked, finalCorrect, finalPoints, finalRevealed
+    }));
+  }catch{}
+}
+function clearState(){ try{ localStorage.removeItem(STATE_KEY); }catch{} }
+
+function restoreState(){
+  let st; try{ st=JSON.parse(localStorage.getItem(STATE_KEY)||"null"); }catch{ st=null; }
+  if(!st || !st.screen || st.screen==="title") return;
+  playerName=st.playerName||"";
+  idx=st.idx||0; points=st.points||0; correctCount=st.correctCount||0;
+  answered=Array.isArray(st.answered)?st.answered:[];
+  order=Array.isArray(st.order)?st.order:[];
+  curPicked=(st.curPicked==null?-1:st.curPicked);
+  wager=st.wager||0;
+  finalOrder=Array.isArray(st.finalOrder)?st.finalOrder:[];
+  finalPicked=(st.finalPicked==null?-1:st.finalPicked);
+  finalCorrect=!!st.finalCorrect; finalPoints=st.finalPoints||0; finalRevealed=!!st.finalRevealed;
+
+  if(st.screen==="quiz" && order.length){
+    document.body.dataset.screen="quiz";
+    renderQuestion();
+    if(curPicked>=0) restoreQuizReveal();
+  } else if(st.screen==="interim"){
+    document.body.dataset.screen="interim";
+    document.getElementById('interimScore').textContent=points;
+    document.getElementById('interimOf').textContent=`/${MAX_POINTS}`;
+    document.getElementById('interimSub').textContent=`${correctCount} of ${QUESTIONS.length} correct`;
+    loadInterim();
+  } else if(st.screen==="wager"){
+    document.body.dataset.screen="wager";
+    document.getElementById('fjStory').textContent=`“${FINAL.story}”`;
+    document.getElementById('wHave').textContent=points;
+    const wi=document.getElementById('wagerInput'); wi.max=points; wi.value=Math.min(Number(wi.value)||0,points);
+  } else if(st.screen==="finalq" && finalOrder.length){
+    document.body.dataset.screen="finalq";
+    document.getElementById('fqWager').textContent=wager;
+    document.getElementById('fqStoryRef').textContent=`“${FINAL.story}”`;
+    document.getElementById('fqText').textContent=FINAL.question;
+    document.getElementById('fqPoints').textContent=`${finalRevealed?finalPoints:points} pts`;
+    buildChoices('fqChoices', finalOrder, finalPick);
+    if(finalPicked>=0) restoreFinalReveal();
+  } else if(st.screen==="results"){
+    showResults();
+  }
+}
+
+function restoreQuizReveal(){
+  const q=QUESTIONS[idx], choices=order[idx], pts=POINTS[q.difficulty]||1;
+  lockChoices('choices', choices, curPicked);
+  const verdict=document.getElementById('verdict'), ansLine=document.getElementById('ansLine');
+  if(choices[curPicked] && choices[curPicked].ok){ verdict.textContent=`Correct! +${pts}`; verdict.className="verdict right"; ansLine.innerHTML=pickPraise(); }
+  else { verdict.textContent="Not quite."; verdict.className="verdict nope"; ansLine.innerHTML=`The answer was <b>${escapeHtml(q.answer)}</b>.`; }
+  document.getElementById('nextBtn').textContent=(idx===QUESTIONS.length-1)?"Finish Round One →":"Next →";
+  document.getElementById('reveal').className="reveal show";
+}
+
+function restoreFinalReveal(){
+  lockChoices('fqChoices', finalOrder, finalPicked);
+  document.getElementById('fqPoints').textContent=`${finalPoints} pts`;
+  const v=document.getElementById('fqVerdict'), a=document.getElementById('fqAnsLine');
+  if(finalCorrect){ v.textContent=`Correct! +${wager}`; v.className="verdict right"; a.innerHTML=`You finish with <b>${finalPoints}</b> points.`; }
+  else { v.textContent=`Not quite. −${wager}`; v.className="verdict nope"; a.innerHTML=`The answer was <b>${escapeHtml(FINAL.answer)}</b>. You finish with <b>${finalPoints}</b> points.`; }
+  document.getElementById('fqReveal').className="reveal show";
+}
+
+function buildChoices(containerId, choices, onPick){
+  const letters=["A","B","C","D","E"];
+  const box=document.getElementById(containerId);
+  box.innerHTML="";
+  choices.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.className="choice";
+    b.innerHTML=`<span class="key">${letters[i]}</span><span class="ctext"></span><span class="mark"></span>`;
+    b.querySelector('.ctext').textContent=c.t;
+    b.onclick=()=>onPick(i);
+    box.appendChild(b);
+  });
+}
+function lockChoices(containerId, choices, picked){
+  [...document.querySelectorAll(`#${containerId} .choice`)].forEach((b,j)=>{
+    b.disabled=true;
+    if(choices[j].ok){b.classList.add('correct');b.querySelector('.mark').textContent="✓";}
+    else if(j===picked){b.classList.add('wrong');b.querySelector('.mark').textContent="✗";}
+    else b.classList.add('dim');
+  });
+}
+
+function initMeta(){
+  document.getElementById('meta-q').textContent = QUESTIONS.length;
+  document.getElementById('meta-stories').textContent = new Set(QUESTIONS.map(q=>q.story)).size;
+  document.getElementById('meta-pts').textContent = MAX_POINTS;
+  const saved = loadSaved();
+  if(saved && saved.name) document.getElementById('startName').value = saved.name;
+}
+
+/* ---------- round one ---------- */
+function startQuiz(){
+  const input = document.getElementById('startName');
+  playerName = (input.value||"").trim().slice(0,24);
+  if(!playerName){ input.focus(); input.classList.add('shake'); setTimeout(()=>input.classList.remove('shake'),450); return; }
+  saveLocal({ name: playerName });
+  idx=0; points=0; correctCount=0; answered=[]; curPicked=-1;
+  wager=0; finalPicked=-1; finalRevealed=false; finalOrder=[]; finalPoints=0; finalCorrect=false;
+  order = QUESTIONS.map(q => shuffle([{t:q.answer,ok:true}, ...q.wrong.map(w=>({t:w,ok:false}))]));
+  document.body.dataset.screen="quiz";
+  renderQuestion();
+  saveState();
+  window.scrollTo(0,0);
+}
+
+function renderQuestion(){
+  const q=QUESTIONS[idx], choices=order[idx];
+  const diff=q.difficulty.toLowerCase(), pts=POINTS[diff]||1;
+  document.getElementById('prog').textContent=`Question ${idx+1} of ${QUESTIONS.length}`;
+  document.getElementById('scorePill').textContent=`${points} pts`;
+  document.getElementById('barFill').style.width=`${(idx/QUESTIONS.length)*100}%`;
+  document.getElementById('badges').innerHTML=`<span class="badge ${diff}">${diff} &middot; ${pts} ${pts===1?'pt':'pts'}</span>`;
+  const storyRow=document.getElementById('storyRow');
+  if(q.story){ storyRow.style.display=""; document.getElementById('storyRef').textContent=`“${q.story}”`; }
+  else { storyRow.style.display="none"; }
+  document.getElementById('qtext').textContent=q.question;
+  buildChoices('choices', choices, pick);
+  document.getElementById('reveal').className="reveal";
+}
+
+function pick(i){
+  const q=QUESTIONS[idx], choices=order[idx], chosen=choices[i], pts=POINTS[q.difficulty]||1;
+  lockChoices('choices', choices, i);
+  const correct=chosen.ok;
+  if(correct){ points+=pts; correctCount++; }
+  answered.push({correct, picked:chosen.t});
+  document.getElementById('scorePill').textContent=`${points} pts`;
+  const verdict=document.getElementById('verdict'), ansLine=document.getElementById('ansLine');
+  if(correct){ verdict.textContent=`Correct! +${pts}`; verdict.className="verdict right"; ansLine.innerHTML=pickPraise(); }
+  else { verdict.textContent="Not quite."; verdict.className="verdict nope"; ansLine.innerHTML=`The answer was <b>${escapeHtml(q.answer)}</b>.`; }
+  document.getElementById('nextBtn').textContent=(idx===QUESTIONS.length-1)?"Finish Round One →":"Next →";
+  const rev=document.getElementById('reveal'); rev.className="reveal show";
+  rev.scrollIntoView({behavior:"smooth",block:"nearest"});
+  curPicked=i; saveState();
+}
+
+const PRAISE=["You were paying attention.","Textbook. You know your stuff.","Locked in. Nicely done.","That one was in the fine print — well read."];
+function pickPraise(){return PRAISE[Math.floor(Math.random()*PRAISE.length)];}
+
+function nextQuestion(){
+  if(idx<QUESTIONS.length-1){ idx++; curPicked=-1; renderQuestion(); saveState(); window.scrollTo({top:0,behavior:"smooth"}); }
+  else { showInterim(); }
+}
+
+/* ---------- interim standings ---------- */
+function showInterim(){
+  document.body.dataset.screen="interim";
+  document.getElementById('interimScore').textContent=points;
+  document.getElementById('interimOf').textContent=`/${MAX_POINTS}`;
+  document.getElementById('interimSub').textContent=`${correctCount} of ${QUESTIONS.length} correct`;
+  postScore("round", points, answered.map(a=>!!a.correct));
+  loadInterim();
+  saveState();
+  window.scrollTo(0,0);
+}
+
+/* ---------- final jeopardy: wager ---------- */
+function goFinalJeopardy(){
+  document.body.dataset.screen="wager";
+  document.getElementById('fjStory').textContent=`“${FINAL.story}”`;
+  document.getElementById('wHave').textContent=points;
+  const wi=document.getElementById('wagerInput');
+  wi.max=points; wi.value=Math.min(Number(wi.value)||0, points);
+  document.getElementById('wagerErr').textContent="";
+  saveState();
+  window.scrollTo(0,0);
+}
+function setWager(v){
+  const wi=document.getElementById('wagerInput');
+  if(v==='half') wi.value=Math.floor(points/2);
+  else if(v==='all') wi.value=points;
+  else wi.value=v;
+}
+function lockWager(){
+  const wi=document.getElementById('wagerInput');
+  let w=Math.floor(Number(wi.value));
+  const err=document.getElementById('wagerErr');
+  if(isNaN(w)||w<0){ err.textContent="Enter a wager of 0 or more."; return; }
+  if(w>points){ err.textContent=`You only have ${points} points to wager.`; return; }
+  wager=w;
+  finalPicked=-1; finalRevealed=false;
+  document.body.dataset.screen="finalq";
+  document.getElementById('fqWager').textContent=wager;
+  document.getElementById('fqPoints').textContent=`${points} pts`;
+  document.getElementById('fqStoryRef').textContent=`“${FINAL.story}”`;
+  document.getElementById('fqText').textContent=FINAL.question;
+  finalOrder=shuffle([{t:FINAL.answer,ok:true}, ...FINAL.wrong.map(w=>({t:w,ok:false}))]);
+  buildChoices('fqChoices', finalOrder, finalPick);
+  document.getElementById('fqReveal').className="reveal";
+  saveState();
+  window.scrollTo(0,0);
+}
+function finalPick(i){
+  finalPicked=i;
+  lockChoices('fqChoices', finalOrder, i);
+  finalCorrect=finalOrder[i].ok;
+  finalPoints = finalCorrect ? points+wager : points-wager;
+  document.getElementById('fqPoints').textContent=`${finalPoints} pts`;
+  const v=document.getElementById('fqVerdict'), a=document.getElementById('fqAnsLine');
+  if(finalCorrect){ v.textContent=`Correct! +${wager}`; v.className="verdict right"; a.innerHTML=`You finish with <b>${finalPoints}</b> points.`; }
+  else { v.textContent=`Not quite. −${wager}`; v.className="verdict nope"; a.innerHTML=`The answer was <b>${escapeHtml(FINAL.answer)}</b>. You finish with <b>${finalPoints}</b> points.`; }
+  const rev=document.getElementById('fqReveal'); rev.className="reveal show";
+  rev.scrollIntoView({behavior:"smooth",block:"nearest"});
+  finalRevealed=true; saveState();
+}
+
+/* ---------- final results / podium ---------- */
+function showResults(){
+  document.body.dataset.screen="results";
+  document.getElementById('finalScore').textContent=finalPoints;
+  document.getElementById('scoreSub').textContent=
+    `${correctCount}/${QUESTIONS.length} in round one · wagered ${wager} (${finalCorrect?'won':'lost'})`;
+  const pct=MAX_POINTS?Math.round((finalPoints/MAX_POINTS)*100):0;
+  const rank=RANKS.find(r=>pct>=r.min)||RANKS[RANKS.length-1];
+  document.getElementById('rankTitle').textContent=rank.title;
+  document.getElementById('rankMsg').textContent=rank.msg;
+
+  const bd=document.getElementById('breakdown'); bd.innerHTML="";
+  QUESTIONS.forEach((q,i)=>{
+    const ans=answered[i];
+    const row=document.createElement('div'); row.className="brow";
+    row.innerHTML=`<span class="ico">${ans.correct?"✅":"❌"}</span><span class="bq"><b></b>${ans.correct?"":`<br><span class="corr">→ ${escapeHtml(q.answer)}</span>`}</span>`;
+    row.querySelector('b').textContent=q.question.replace(/^PLACEHOLDER\s*—\s*/,'');
+    bd.appendChild(row);
+  });
+  const frow=document.createElement('div'); frow.className="brow";
+  frow.innerHTML=`<span class="ico">${finalCorrect?"✅":"❌"}</span><span class="bq"><b></b><br><span class="corr">Final Jeopardy · wagered ${wager}${finalCorrect?"":` → ${escapeHtml(FINAL.answer)}`}</span></span>`;
+  frow.querySelector('b').textContent=FINAL.question.replace(/^PLACEHOLDER\s*—\s*/,'');
+  bd.appendChild(frow);
+
+  postScore("final", finalPoints);
+  saveLocal({ finalPoints });
+  loadLeaderboard();
+  if(pct>=60) fireConfetti();
+  saveState();
+  window.scrollTo(0,0);
+}
+
+/* ---------- supabase ---------- */
+function postScore(stage, pts, perQ){
+  const flag = stage==="round" ? "roundPosted" : "finalPosted";
+  const saved = loadSaved()||{};
+  if(saved[flag]) return;                       // one post per stage per device
+  const payload={ stage, name:playerName, points:pts, correct:correctCount, total:QUESTIONS.length, max:MAX_POINTS };
+  if(perQ) payload.perQ = perQ;
+  fetch(`${SUPABASE_URL}/rest/v1/scores`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Prefer':'return=minimal'},
+    body:JSON.stringify({ day_index:FD_DAY_INDEX, grade:JSON.stringify(payload) })
+  }).then(r=>{ if(r.ok) saveLocal({[flag]:true, [stage==="round"?"roundPoints":"finalPoints"]:pts}); }).catch(()=>{});
+}
+
+async function fetchEntries(stage){
+  const res=await fetch(`${SUPABASE_URL}/rest/v1/scores?day_index=eq.${FD_DAY_INDEX}&select=grade`,
+    { headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`} });
+  if(!res.ok) throw new Error(res.status);
+  const rows=await res.json();
+  const out=[];
+  rows.forEach(r=>{ try{ const o=JSON.parse(r.grade); if(o&&o.stage===stage&&o.name&&typeof o.points==='number') out.push(o); }catch{} });
+  out.sort((a,b)=>b.points-a.points);
+  return out;
+}
+
+async function loadInterim(){
+  const list=document.getElementById('standList'), total=document.getElementById('standTotal');
+  const bd=document.getElementById('qBreakdown');
+  try{
+    const entries=await fetchEntries("round");
+    renderStandings(entries);
+    renderBreakdown(entries);
+  }catch{
+    list.innerHTML=`<div class="lb-empty">Couldn&rsquo;t load standings right now.</div>`; total.textContent="";
+    bd.innerHTML=`<div class="lb-empty">Couldn&rsquo;t load the breakdown right now.</div>`;
+  }
+}
+
+function renderStandings(entries){
+  const list=document.getElementById('standList'), total=document.getElementById('standTotal');
+  const saved=loadSaved()||{};
+  if(!entries.length){ list.innerHTML=`<div class="lb-empty">No one&rsquo;s finished round one yet.</div>`; total.textContent=""; return; }
+  list.innerHTML="";
+  let mine=-1;
+  entries.forEach((e,i)=>{
+    const me = saved.roundPosted && e.name===saved.name && e.points===saved.roundPoints && mine<0;
+    if(me) mine=i;
+    const row=document.createElement('div'); row.className="lb-row"+(me?" me":"");
+    row.innerHTML=`<span class="rk">${i+1}</span><span class="nm"></span><span class="pt">${e.points}</span>`;
+    row.querySelector('.nm').textContent=e.name;
+    list.appendChild(row);
+  });
+  total.innerHTML=`${entries.length} ${entries.length===1?'player has':'players have'} finished round one`+
+    (mine>=0?` &bull; you&rsquo;re <b style="color:var(--gold)">#${mine+1}</b> so far`:``);
+}
+
+function renderBreakdown(entries){
+  const box=document.getElementById('qBreakdown');
+  const withQ=entries.filter(e=>Array.isArray(e.perQ) && e.perQ.length===QUESTIONS.length);
+  if(!withQ.length){ box.innerHTML=`<div class="lb-empty">No question data yet — it&rsquo;ll appear as people finish.</div>`; return; }
+  const stats=QUESTIONS.map((q,i)=>{
+    const right=[], wrong=[];
+    withQ.forEach(e=>{ (e.perQ[i]?right:wrong).push(e.name); });
+    return {i, right, wrong, n:right.length+wrong.length};
+  });
+  // most-missed first (fewest correct), then by original order
+  stats.sort((a,b)=> (a.right.length-b.right.length) || (a.i-b.i));
+  box.innerHTML="";
+  stats.forEach(s=>{
+    const q=QUESTIONS[s.i], diff=q.difficulty, pct=s.n?Math.round(s.right.length/s.n*100):0;
+    const div=document.createElement('div'); div.className="qb";
+    div.innerHTML=`
+      <div class="qb-top"><span class="badge ${diff}">${diff}</span><span class="qb-stat">${s.right.length}/${s.n} got it</span></div>
+      <div class="qb-meter"><i style="width:${pct}%"></i></div>
+      <div class="qb-q"></div>
+      <div class="qb-names"></div>`;
+    div.querySelector('.qb-q').textContent=q.question.replace(/^PLACEHOLDER\s*—\s*/,'');
+    const names=div.querySelector('.qb-names');
+    s.right.forEach(n=>{ const sp=document.createElement('span'); sp.className="who right"; sp.textContent="✓ "+n; names.appendChild(sp); });
+    s.wrong.forEach(n=>{ const sp=document.createElement('span'); sp.className="who wrong"; sp.textContent="✗ "+n; names.appendChild(sp); });
+    box.appendChild(div);
+  });
+}
+
+async function loadLeaderboard(){
+  const podium=document.getElementById('podium'), list=document.getElementById('lbList'), total=document.getElementById('lbTotal');
+  const saved=loadSaved()||{};
+  try{
+    const entries=await fetchEntries("final");
+    if(!entries.length){ podium.innerHTML=""; list.innerHTML=`<div class="lb-empty">No final scores in yet.</div>`; total.textContent=""; return; }
+    let mine=-1;
+    if(saved.finalPosted){ mine=entries.findIndex(e=>e.name===saved.name && e.points===saved.finalPoints); }
+
+    const medals=["🥇","🥈","🥉"], slots=[1,0,2], cls={0:"first",1:"second",2:"third"};
+    podium.innerHTML="";
+    slots.forEach(pos=>{
+      const e=entries[pos];
+      const div=document.createElement('div'); div.className=`pod ${cls[pos]}`+(e?"":" empty");
+      div.innerHTML=`<div class="medal">${medals[pos]}</div><div class="pname">${e?"":"—"}</div><div class="ppts">${e?e.points+" pts":"&nbsp;"}</div><div class="block">${pos+1}</div>`;
+      if(e) div.querySelector('.pname').textContent=e.name;
+      podium.appendChild(div);
+    });
+
+    list.innerHTML="";
+    entries.slice(3).forEach((e,i)=>{
+      const rank=i+4, me=(mine===rank-1);
+      const row=document.createElement('div'); row.className="lb-row"+(me?" me":"");
+      row.innerHTML=`<span class="rk">${rank}</span><span class="nm"></span><span class="pt">${e.points}</span>`;
+      row.querySelector('.nm').textContent=e.name;
+      list.appendChild(row);
+    });
+
+    total.innerHTML=`${entries.length} ${entries.length===1?'person has':'people have'} finished`+
+      (mine>=0?` &bull; you placed <b style="color:var(--gold)">#${mine+1}</b>`:``);
+  }catch{ podium.innerHTML=""; list.innerHTML=`<div class="lb-empty">Couldn&rsquo;t load the leaderboard right now.</div>`; total.textContent=""; }
+}
+
+function restart(){
+  clearState();
+  curPicked=-1; finalPicked=-1; finalRevealed=false;
+  document.getElementById('confetti').innerHTML="";
+  document.body.dataset.screen="title";
+  window.scrollTo(0,0);
+}
+
+function fireConfetti(){
+  const colors=["#e9b949","#4cc38a","#e5645f","#f4f1e9","#caa033","#7aa2ff"];
+  const box=document.getElementById('confetti'); box.innerHTML="";
+  for(let i=0;i<70;i++){
+    const c=document.createElement('i');
+    c.style.left=Math.random()*100+"vw";
+    c.style.background=colors[Math.floor(Math.random()*colors.length)];
+    c.style.animationDuration=(2.2+Math.random()*1.8)+"s";
+    c.style.animationDelay=(Math.random()*0.6)+"s";
+    c.style.transform=`rotate(${Math.random()*360}deg)`;
+    if(Math.random()>.5) c.style.borderRadius="50%";
+    box.appendChild(c);
+  }
+  setTimeout(()=>{ box.innerHTML=""; }, 5000);
+}
+
+initMeta();
+restoreState();
+</script>
+</body>
+</html>
