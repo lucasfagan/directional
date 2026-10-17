@@ -77,6 +77,7 @@
       box-shadow: 0 0 0 2px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.5);
     }
     .tap-pin.miss { background: rgba(255,90,90,0.5); }
+    .tap-pin.hit  { background: var(--good); }
     .target-ring {
       width: 56px; height: 56px; border-radius: 50%;
       border: 3px solid var(--bad); box-shadow: 0 0 12px rgba(255,90,90,0.6);
@@ -420,6 +421,7 @@
       <div class="res-grid" id="res-grid"></div>
       <div class="btn-row">
         <button class="btn btn-primary" id="btn-share">Share</button>
+        <button class="btn btn-secondary" id="btn-copy">Copy</button>
         <button class="btn btn-secondary" id="btn-view-map">View map</button>
       </div>
       <button class="btn btn-secondary btn-block" id="btn-play-again" style="display:none;margin-top:10px">Play Again</button>
@@ -848,6 +850,11 @@
   let missMarker = null;
   let targetRing = null;
 
+  // Furthest zoom-out: globe about 70% of the shorter screen side
+  function minZoomForViewport() {
+    return Math.max(0, Math.log2(Math.min(innerWidth, innerHeight) * 0.7 * Math.PI / 512));
+  }
+
   function fitZoom(freeH = innerHeight - 160) {
     const m = Math.min(innerWidth, freeH);
     return Math.max(0, Math.log2(Math.max(m, 200) * 0.9 * Math.PI / 512));
@@ -881,7 +888,7 @@
       },
       center: [12, 22],
       zoom: fitZoom(),
-      minZoom: 0,
+      minZoom: minZoomForViewport(),
       maxZoom: 10,
       dragRotate: false,
       pitchWithRotate: false,
@@ -895,28 +902,36 @@
       if (a) { a.classList.remove('maplibregl-compact-show'); a.removeAttribute('open'); }
     });
     map.touchZoomRotate.disableRotation();
+    addEventListener('resize', () => map.setMinZoom(minZoomForViewport()));
     map.keyboard.disableRotation();
     return new Promise(res => map.on('load', res));
   }
 
   // Outline that briefly shows the country you just found, then fades away
   let flashAnim = 0;
-  function flashCountry(geometry) {
+  let flashMarker = null;
+  function flashCountry(geometry, ll) {
     map.getSource('flash').setData({ type: 'Feature', geometry, properties: {} });
     cancelAnimationFrame(flashAnim);
+    if (flashMarker) flashMarker.remove();
+    const pin = makePin('hit');
+    flashMarker = new maplibregl.Marker({ element: pin }).setLngLat(ll).addTo(map);
     const start = performance.now(), HOLD = 450, FADE = 900;
     const step = now => {
       const t = now - start;
       const k = t < HOLD ? 1 : Math.max(0, 1 - (t - HOLD) / FADE);
       map.setPaintProperty('flash-fill', 'fill-opacity', 0.35 * k);
       map.setPaintProperty('flash-line', 'line-opacity', k);
+      pin.style.opacity = k;
       if (k > 0) flashAnim = requestAnimationFrame(step);
+      else if (flashMarker) { flashMarker.remove(); flashMarker = null; }
     };
     flashAnim = requestAnimationFrame(step);
   }
 
   function clearFlash() {
     cancelAnimationFrame(flashAnim);
+    if (flashMarker) { flashMarker.remove(); flashMarker = null; }
     map.setPaintProperty('flash-fill', 'fill-opacity', 0);
     map.setPaintProperty('flash-line', 'line-opacity', 0);
   }
@@ -1121,7 +1136,7 @@
       game.found.push(targetIdx);
       game.round++;
       saveProgress();
-      flashCountry(shape.display);
+      flashCountry(shape.display, ll);
       retrigger($('prompt'), 'flash-good');
       const sn = $('streak-num');
       sn.textContent = game.found.length;
@@ -1131,7 +1146,7 @@
     } else {
       const hit = whatIsAt(ll.lng, ll.lat);
       game.missed = targetIdx;
-      game.tapped = { lng: ll.lng, lat: ll.lat, name: hit ? hit.name : null };
+      game.tapped = { lng: ll.lng, lat: ll.lat, name: hit ? hit.name : null, km: Math.round(d) };
       showMiss(ll, hit);
     }
   }
@@ -1156,7 +1171,7 @@
     }
 
     const tappedTxt = hit ? `That was <strong>${escapeHtml(hit.name)}</strong>.` : `That was the <strong>ocean</strong>.`;
-    $('miss-msg').innerHTML = `❌ ${tappedTxt} <strong>${escapeHtml(target.name)}</strong> is outlined in red.`;
+    $('miss-msg').innerHTML = `❌ ${tappedTxt} <strong>${escapeHtml(target.name)}</strong> is outlined in red — you were <strong>${fmtKm(game.tapped.km)}</strong> away.`;
     $('prompt-label-text').textContent = 'Run over';
     retrigger($('prompt'), 'flash-bad');
     setState('missed');
@@ -1199,6 +1214,7 @@
       found: game.found.map(i => COUNTRIES[i].name),
       missed: game.missed !== null ? { name: COUNTRIES[game.missed].name, tier: COUNTRIES[game.missed].tier } : null,
       tapped: game.tapped ? game.tapped.name : null,
+      missKm: game.tapped ? game.tapped.km : null,
       perfect: !!perfect,
     };
     game._entry = entry; // test mode doesn't save, so "See results" reads it from here
@@ -1220,10 +1236,14 @@
     return lines.join('\n');
   }
 
+  function fmtKm(km) { return `${km.toLocaleString('en-US')} km`; }
+
   function buildShareText(entry) {
     const head = TEST_MODE ? '🌍 Map Tap Streaks (practice)' : `🌍 Map Tap Streaks #${entry.puzzleNum}`;
     const score = entry.perfect ? `🏆 Perfect run: ${entry.score}!` : `🔥 Streak: ${entry.score}`;
-    return `${head}\n${score}\n${squaresFor(entry)}\n${SHARE_URL}`;
+    // Distance only, no country name, so the share doesn't spoil today's sequence
+    const miss = entry.missKm != null ? `\n📍 Final guess: ${fmtKm(entry.missKm)} off` : '';
+    return `${head}\n${score}\n${squaresFor(entry)}${miss}\n${SHARE_URL}`;
   }
 
   function share(text) {
@@ -1264,7 +1284,8 @@
     $('res-score').textContent = entry.score;
     let sub = SUBS[0][1];
     SUBS.forEach(([n, s]) => { if (entry.score >= n) sub = s; });
-    $('res-sub').textContent = entry.perfect ? 'You found every single country. Wow.' : sub;
+    $('res-sub').textContent = entry.perfect ? 'You found every single country. Wow.'
+      : entry.missKm != null ? `${sub} Final guess: ${fmtKm(entry.missKm)} off.` : sub;
     $('res-grid').textContent = squaresFor(entry);
 
     const list = $('found-list');
@@ -1279,7 +1300,9 @@
       const chip = document.createElement('span');
       chip.className = 'chip missed';
       chip.innerHTML = `❌ <i class="dot ${entry.missed.tier}"></i>${escapeHtml(entry.missed.name)}`
-        + (entry.tapped ? ` <span style="color:var(--text-dim)">(tapped ${escapeHtml(entry.tapped)})</span>` : '');
+        + (entry.tapped || entry.missKm != null
+          ? ` <span style="color:var(--text-dim)">(${[entry.tapped && 'tapped ' + escapeHtml(entry.tapped), entry.missKm != null && fmtKm(entry.missKm) + ' off'].filter(Boolean).join(', ')})</span>`
+          : '');
       list.appendChild(chip);
     }
 
@@ -1291,6 +1314,7 @@
     $('st-days').textContent = computeDayStreak(entry.dayIndex);
 
     $('btn-share').onclick = () => share(buildShareText(entry));
+    $('btn-copy').onclick = () => copyText(buildShareText(entry));
     $('btn-play-again').style.display = TEST_MODE ? '' : 'none';
     $('next-in').style.display = TEST_MODE ? 'none' : '';
     $('btn-view-map').style.display = game && game.missed !== null ? '' : 'none';
