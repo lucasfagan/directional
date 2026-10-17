@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rounds</title>
+  <meta name="description" content="A daily patient-management game for med folks. One case a day: make the calls, see what happens.">
+  <meta property="og:title" content="Rounds">
+  <meta property="og:description" content="A daily patient-management game for med folks. One case a day: make the calls, see what happens.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://directional.global/rounds">
+  <meta name="twitter:card" content="summary">
+  <style>
+    :root {
+      --bg: #f2f5f7;
+      --surface: #ffffff;
+      --surface2: #f6f8fa;
+      --border: #dce3ea;
+      --text: #15202b;
+      --text-dim: #5e6e7e;
+      --accent: #0d7a87;
+      --accent-soft: #e1f2f4;
+      --best: #23945a;
+      --best-soft: #e3f5ea;
+      --ok: #c99700;
+      --ok-soft: #fbf3d9;
+      --poor: #e07a22;
+      --poor-soft: #fdeedf;
+      --harm: #d23f3f;
+      --harm-soft: #fbe5e5;
+      --waste: #8593a2;
+      --waste-soft: #eef1f4;
+      --mon-bg: #0b1217;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1116;
+        --surface: #131b22;
+        --surface2: #19232c;
+        --border: #26333e;
+        --text: #e2e9ef;
+        --text-dim: #8a9aaa;
+        --accent: #2db0c0;
+        --accent-soft: #14313a;
+        --best-soft: #143223;
+        --ok-soft: #3a3110;
+        --poor-soft: #3b2614;
+        --harm-soft: #3d1a1a;
+        --waste-soft: #1f2830;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.5; min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+    }
+    b, strong { font-weight: 650; }
+
+    /* ── HEADER ──────────────────────────────────── */
+    header {
+      position: sticky; top: 0; z-index: 20;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+    }
+    .hdr-inner {
+      max-width: 640px; margin: 0 auto; padding: 10px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { font-size: 1.5rem; line-height: 1; }
+    .logo-name { font-size: 1rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+    .puzzle-num { font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.08em; }
+    .test-badge { color: #e07a22; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+    .header-btns { display: flex; gap: 8px; }
+    .icon-btn {
+      width: 36px; height: 36px; border-radius: 8px; cursor: pointer;
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      font-size: 1rem; display: flex; align-items: center; justify-content: center;
+    }
+    .icon-btn:hover { background: var(--surface2); }
+
+    main { max-width: 640px; margin: 0 auto; padding: 16px 16px 80px; }
+
+    /* ── STATE MACHINE ───────────────────────────── */
+    .panel { display: none; }
+    body[data-state="start"]   #panel-start  { display: block; }
+    body[data-state="playing"] #panel-case   { display: block; }
+    body[data-state="result"]  #panel-result { display: block; }
+    body[data-state="result"]  #panel-case   { display: block; }
+    body[data-state="result"]  .monitor-wrap { display: none; }
+    body[data-state="loading"] main::before { content: 'Loading…'; color: var(--text-dim); }
+
+    /* ── CARDS / BUTTONS ─────────────────────────── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 18px; margin-bottom: 14px;
+    }
+    .eyebrow {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px;
+    }
+    .btn {
+      font-family: inherit; font-size: 0.92rem; font-weight: 600;
+      border-radius: 10px; padding: 12px 18px; cursor: pointer;
+      border: 1px solid transparent; color: var(--text);
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:hover:not(:disabled) { opacity: 0.88; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--surface2); border-color: var(--border); }
+    .btn-block { width: 100%; }
+    .btn-row { display: flex; gap: 10px; }
+    .btn-row .btn { flex: 1; }
+    .link-btn {
+      background: none; border: none; color: var(--accent); font: inherit;
+      font-size: 0.85rem; cursor: pointer; text-decoration: underline; padding: 4px;
+    }
+
+    /* ── START ───────────────────────────────────── */
+    .start-card { text-align: center; padding: 26px 20px; }
+    .start-title { font-size: 1.6rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+    .start-sub { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 18px; }
+    .pt-preview {
+      text-align: left; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 16px; margin-bottom: 18px;
+    }
+    .pt-preview .who { font-size: 1.1rem; font-weight: 700; }
+    .pt-preview .where { font-size: 0.82rem; color: var(--text-dim); }
+    .pt-preview .cc { margin-top: 6px; font-size: 0.92rem; }
+    .start-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 18px; line-height: 1.6; }
+
+    /* ── CASE ────────────────────────────────────── */
+    .monitor-wrap { position: sticky; top: 57px; z-index: 10; padding-bottom: 10px; background: var(--bg); }
+    .pt-banner {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+      font-size: 0.85rem; padding: 2px 2px 8px;
+    }
+    .pt-banner .who { font-weight: 700; }
+    .pt-banner .where { color: var(--text-dim); font-size: 0.78rem; text-align: right; }
+    .monitor {
+      background: var(--mon-bg); border-radius: 12px; padding: 8px 6px;
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: #cfd8dc;
+      border: 1px solid var(--border);
+    }
+    .vital { text-align: center; padding: 2px 0; }
+    .vital .lbl { font-size: 0.58rem; letter-spacing: 0.08em; opacity: 0.7; }
+    .vital .val { font-size: 1.15rem; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+    .vital.hr  .val { color: #46e07f; }
+    .vital.bp  .val { color: #ff7a7a; font-size: 1.02rem; }
+    .vital.rr  .val { color: #ffd34f; }
+    .vital.sp  .val { color: #4fd0ff; }
+    .vital.tmp .val { color: #e6edf0; }
+    .vital .val.changed { animation: blink 0.9s ease-out 2; }
+    @keyframes blink { 50% { opacity: 0.25; } }
+
+    .progress { display: flex; gap: 5px; margin-top: 8px; }
+    .progress span { flex: 1; height: 5px; border-radius: 3px; background: var(--border); }
+    .progress span.cur { background: var(--accent); }
+    .progress span.best { background: var(--best); }
+    .progress span.ok   { background: var(--ok); }
+    .progress span.poor { background: var(--poor); }
+    .progress span.harm { background: var(--harm); }
+
+    .chart-block { font-size: 0.93rem; }
+    .chart-block p + p { margin-top: 8px; }
+    .chart-block .sec { margin-top: 10px; }
+    .chart-block .sec-lbl {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text-dim);
+    }
+    .labs {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 4px 14px; margin-top: 8px; font-size: 0.86rem;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+    }
+    .labs div { display: flex; justify-content: space-between; gap: 8px; }
+    .labs .k { color: var(--text-dim); }
+    .labs .v { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+    .labs .v.H { color: var(--harm); }
+    .labs .v.L { color: #2f7fd6; }
+    .labs .v.H::after { content: ' H'; font-size: 0.7em; }
+    .labs .v.L::after { content: ' L'; font-size: 0.7em; }
+
+    .step-head { display: flex; justify-content: space-between; align-items: center; }
+    .step-head .eyebrow { margin: 0; }
+    .step-sq { font-size: 1rem; }
+    .say { margin-top: 8px; }
+    .q { font-weight: 700; font-size: 1.02rem; margin-top: 14px; }
+    .pick-hint { font-size: 0.78rem; color: var(--text-dim); margin-top: 2px; }
+    .opts { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .opt {
+      font: inherit; font-size: 0.92rem; text-align: left; cursor: pointer;
+      background: var(--surface); color: var(--text);
+      border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 12px 11px 40px;
+      position: relative; transition: border-color 0.12s, background 0.12s;
+    }
+    .opt::before {
+      content: ''; position: absolute; left: 13px; top: 13px;
+      width: 16px; height: 16px; border: 2px solid var(--border); border-radius: 50%;
+      background: var(--surface);
+    }
+    .opts.many .opt::before { border-radius: 4px; }
+    .opt:hover:not(.locked) { border-color: var(--accent); }
+    .opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+    .opt.sel::before { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--surface); }
+    .opt.locked { cursor: default; }
+    .opt.locked.sel::before { box-shadow: inset 0 0 0 3px var(--surface); }
+    .opt .tag {
+      display: inline-block; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; border-radius: 5px; padding: 1px 6px; margin-bottom: 3px;
+    }
+    .opt .ofb { display: block; font-size: 0.82rem; color: var(--text-dim); margin-top: 4px; }
+    .opt.r-best, .opt.r-key { border-color: var(--best); background: var(--best-soft); }
+    .opt.r-ok  { border-color: var(--ok); background: var(--ok-soft); }
+    .opt.r-poor { border-color: var(--poor); }
+    .opt.r-waste { border-color: var(--waste); }
+    .opt.r-harm { border-color: var(--harm); }
+    .opt.r-poor.sel  { background: var(--poor-soft); }
+    .opt.r-waste.sel { background: var(--waste-soft); }
+    .opt.r-harm.sel  { background: var(--harm-soft); }
+    .opt.locked:not(.sel)::before { opacity: 0.5; }
+    .tag.best, .tag.key { background: var(--best); color: #fff; }
+    .tag.ok   { background: var(--ok); color: #fff; }
+    .tag.poor { background: var(--poor); color: #fff; }
+    .tag.waste { background: var(--waste); color: #fff; }
+    .tag.harm { background: var(--harm); color: #fff; }
+    .you { font-size: 0.66rem; font-weight: 700; color: var(--accent); margin-left: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+    .confirm-row { margin-top: 14px; }
+    .verdict {
+      margin-top: 14px; padding: 10px 12px; border-radius: 10px;
+      font-weight: 650; font-size: 0.92rem;
+    }
+    .verdict.best { background: var(--best-soft); color: var(--best); }
+    .verdict.ok   { background: var(--ok-soft); color: var(--ok); }
+    .verdict.poor { background: var(--poor-soft); color: var(--poor); }
+    .verdict.harm { background: var(--harm-soft); color: var(--harm); }
+    .after { margin-top: 10px; font-size: 0.9rem; padding-left: 10px; border-left: 3px solid var(--accent); }
+
+    /* ── RESULT ──────────────────────────────────── */
+    .res-card { text-align: center; }
+    .res-score { font-size: 3.4rem; font-weight: 800; line-height: 1.05; }
+    .res-score small { font-size: 1.1rem; color: var(--text-dim); font-weight: 600; }
+    .res-grade { font-size: 1rem; font-weight: 700; margin-top: 2px; }
+    .res-dx { margin-top: 10px; font-size: 0.92rem; color: var(--text-dim); }
+    .res-dx b { color: var(--text); }
+    .res-grid { font-size: 1.5rem; letter-spacing: 2px; margin: 12px 0 16px; }
+    .pearls { text-align: left; margin: 0 0 16px; padding-left: 18px; font-size: 0.88rem; }
+    .pearls li + li { margin-top: 6px; }
+    .section-title {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--text-dim); margin: 18px 0 8px; text-align: left;
+    }
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+    .stat-num { font-size: 1.35rem; font-weight: 800; }
+    .stat-lbl { font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+    .community-chart { display: flex; flex-direction: column; gap: 5px; }
+    .community-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+    .community-lbl { min-width: 56px; color: var(--text-dim); text-align: left; }
+    .community-bar-bg { flex: 1; background: var(--surface2); border-radius: 4px; height: 16px; overflow: hidden; }
+    .community-bar { height: 100%; border-radius: 4px; background: var(--waste); }
+    .community-bar.player { background: var(--accent); }
+    .community-pct { min-width: 64px; text-align: right; color: var(--text-dim); font-size: 0.75rem; }
+    .community-note { font-size: 0.78rem; color: var(--text-dim); margin-top: 8px; }
+    .next-in { font-size: 0.85rem; color: var(--text-dim); margin-top: 14px; }
+    .review-title { margin: 22px 0 10px; text-align: center; }
+
+    /* ── MODALS ──────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; z-index: 50; background: rgba(5,10,15,0.55);
+      display: flex; align-items: flex-end; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    @media (min-width: 600px) { .overlay { align-items: center; } }
+    .overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px 16px 0 0; width: 100%; max-width: 520px;
+      max-height: 86vh; overflow-y: auto; padding: 20px;
+    }
+    @media (min-width: 600px) { .modal { border-radius: 16px; } }
+    .modal-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .modal-title { font-size: 1.15rem; font-weight: 700; }
+    .modal-close { background: none; border: none; color: var(--text-dim); font-size: 1.3rem; cursor: pointer; }
+    .modal-section { margin-bottom: 16px; }
+    .modal-section h3 {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px;
+    }
+    .modal-section p, .modal-section li { font-size: 0.88rem; line-height: 1.6; }
+    .modal-section ul { padding-left: 18px; }
+    .modal-section p + p { margin-top: 8px; }
+    .legend { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 0.86rem; }
+    .disclaimer { font-size: 0.76rem; color: var(--text-dim); }
+    .hist-item {
+      display: flex; align-items: center; gap: 12px; padding: 8px 0;
+      border-bottom: 1px solid var(--border); font-size: 0.88rem;
+    }
+    .hist-item .hi-num { color: var(--text-dim); min-width: 40px; }
+    .hist-item .hi-grid { flex: 1; letter-spacing: 1px; }
+    .hist-item .hi-score { font-weight: 700; }
+    .case-pick {
+      display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+      background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+    }
+    .case-pick:hover { border-color: var(--accent); }
+    .case-pick .who { font-weight: 650; }
+    .case-pick .cc { font-size: 0.82rem; color: var(--text-dim); }
+
+    #toast {
+      position: fixed; left: 50%; bottom: 24px; z-index: 60;
+      transform: translateX(-50%) translateY(120px);
+      background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 10px;
+      font-size: 0.88rem; font-weight: 600; transition: transform 0.25s;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body data-state="loading">
+
+<header>
+  <div class="hdr-inner">
+    <div class="logo">
+      <div class="logo-icon">🩺</div>
+      <div>
+        <div class="logo-name">Rounds</div>
+        <div class="puzzle-num" id="puzzle-num"></div>
+      </div>
+    </div>
+    <div class="header-btns">
+      <button class="icon-btn" id="btn-help" title="How to play">?</button>
+      <button class="icon-btn" id="btn-stats" title="Stats">📊</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- START -->
+  <section id="panel-start" class="panel">
+    <div class="card start-card">
+      <div class="start-title">Rounds</div>
+      <div class="start-sub" id="start-sub">Daily case</div>
+      <div class="pt-preview">
+        <div class="eyebrow">Today's patient</div>
+        <div class="who" id="pv-who"></div>
+        <div class="where" id="pv-where"></div>
+        <div class="cc" id="pv-cc"></div>
+      </div>
+      <p class="start-desc">Work the case one decision at a time. Each answer is scored, explained, and the patient responds. One case a day.</p>
+      <button class="btn btn-primary btn-block" id="btn-start">Start case</button>
+      <div style="margin-top:10px"><button class="link-btn" id="btn-practice-start">Practice other cases</button></div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="panel-result" class="panel">
+    <div class="card res-card">
+      <div class="eyebrow" id="res-label">Today's case</div>
+      <div class="res-score"><span id="res-score">0</span><small>/100</small></div>
+      <div class="res-grade" id="res-grade"></div>
+      <div class="res-dx" id="res-dx"></div>
+      <div class="res-grid" id="res-grid"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-share">Share</button>
+        <button class="btn btn-secondary" id="btn-copy">Copy</button>
+      </div>
+
+      <div class="section-title">Teaching points</div>
+      <ul class="pearls" id="res-pearls"></ul>
+
+      <div id="stats-block">
+        <div class="section-title">Your stats</div>
+        <div class="stats-row">
+          <div><div class="stat-num" id="st-played">0</div><div class="stat-lbl">Played</div></div>
+          <div><div class="stat-num" id="st-avg">0</div><div class="stat-lbl">Average</div></div>
+          <div><div class="stat-num" id="st-best">0</div><div class="stat-lbl">Best</div></div>
+          <div><div class="stat-num" id="st-days">0</div><div class="stat-lbl">Day streak</div></div>
+        </div>
+      </div>
+
+      <div id="community" style="display:none">
+        <div class="section-title">Everyone today</div>
+        <div class="community-chart" id="community-chart"></div>
+        <div class="community-note" id="community-note"></div>
+      </div>
+
+      <div class="next-in" id="next-in"></div>
+      <div style="margin-top:12px" class="btn-row">
+        <button class="btn btn-secondary" id="btn-practice-res">Practice other cases</button>
+        <button class="btn btn-secondary" id="btn-back-daily" style="display:none">Back to today</button>
+      </div>
+    </div>
+    <div class="eyebrow review-title">Case review</div>
+  </section>
+
+  <!-- CASE -->
+  <section id="panel-case" class="panel">
+    <div class="monitor-wrap">
+      <div class="pt-banner">
+        <div class="who" id="bn-who"></div>
+        <div class="where" id="bn-where"></div>
+      </div>
+      <div class="monitor" id="monitor"></div>
+      <div class="progress" id="progress"></div>
+    </div>
+    <div id="feed"></div>
+  </section>
+</main>
+
+<!-- HELP -->
+<div class="overlay" id="modal-help">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">How to play</div><button class="modal-close" data-close>✕</button></div>
+    <div class="modal-section">
+      <p>Each day you get one patient. The case unfolds over 5–7 decision points: what to order, what to give, what to do when things change. It's Step 3 CCS–style management, condensed.</p>
+      <p>Some questions want <strong>the single best next step</strong>. Others are <strong>select all that apply</strong>: pick everything you'd actually do, and nothing you wouldn't.</p>
+    </div>
+    <div class="modal-section">
+      <h3>Scoring</h3>
+      <div class="legend">
+        <span>🟩</span><span>Best answer, or every key item with no extras</span>
+        <span>🟨</span><span>Acceptable, or most of the key items</span>
+        <span>🟧</span><span>Not ideal: wrong, or missing most key items</span>
+        <span>🟥</span><span>Harmful choice</span>
+      </div>
+      <p style="margin-top:8px">On select-all questions, unnecessary picks cost a little and harmful ones cost a lot. Your score is out of 100.</p>
+    </div>
+    <div class="modal-section">
+      <p class="disclaimer">Educational game for medical trainees. Not medical advice. Doses and thresholds follow common US guidelines but simplify real practice.</p>
+    </div>
+    <button class="btn btn-primary btn-block" data-close>Got it</button>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="overlay" id="modal-stats">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">History</div><button class="modal-close" data-close>✕</button></div>
+    <div id="hist-list"></div>
+  </div>
+</div>
+
+<!-- PRACTICE PICKER -->
+<div class="overlay" id="modal-practice">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Practice cases</div><button class="modal-close" data-close>✕</button></div>
+    <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:12px">Practice runs aren't saved or shared. They don't affect your stats.</p>
+    <div id="practice-list"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ═══════════════════════════════════════════════════════════════
+  // CONFIG
+  // ═══════════════════════════════════════════════════════════════
+
+  const SUPABASE_URL = 'https://qnlzjddurxpfszhitreb.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_s0MLm4hC1PUsCwAK4HszUg_lLCQWmau';
+  const STATS_DAY_OFFSET = 300000; // shares the Directional `scores` table (US +100000, Map Tap +200000)
+
+  const TEST_MODE  = new URLSearchParams(location.search).has('test');
+  const LAUNCH_UTC = Date.UTC(2026, 9, 17); // Oct 17, 2026 = case #1
+  const SHARE_URL  = 'directional.global/rounds';
+
+  // ═══════════════════════════════════════════════════════════════
+  // CASES
+  //
+  // Single-pick option roles: best / ok / poor / harm
+  // Multi-pick option roles:  key / ok / waste / harm
+  // Steps run in order regardless of the answer; each answer's feedback
+  // explains what would have happened, then the case continues on the
+  // correct path.
+  // ═══════════════════════════════════════════════════════════════
+
+  const CASES = [
+    {
+      id: 'dka',
+      dx: 'Severe diabetic ketoacidosis',
+      who: '19-year-old woman',
+      where: 'Emergency Department',
+      cc: 'Vomiting, abdominal pain, "breathing funny"',
+      stem: `Brought in by her roommate after 2 days of nausea, vomiting, and diffuse abdominal pain. She has <b>type 1 diabetes</b> and ran out of insulin 4 days ago when her insurance lapsed. Today she's been drowsy and "breathing funny."`,
+      exam: `Ill-appearing, drowsy but oriented. Dry mucous membranes, fruity odor on her breath. Deep, rapid respirations. Diffuse mild abdominal tenderness without rebound or guarding. Weight 60 kg.`,
+      vitals: { t: '37.4', hr: 124, bp: '94/58', rr: 30, sp: 99 },
+      labs: [['Fingerstick glucose', '486', 'H']],
+      steps: [
+        {
+          pick: 'many',
+          q: 'What do you send first?',
+          options: [
+            { t: 'Basic metabolic panel', r: 'key', fb: 'You need potassium, bicarbonate, the anion gap and creatinine before anything else.' },
+            { t: 'Venous blood gas', r: 'key', fb: 'Confirms acidemia and its severity. A VBG is fine; an arterial stick is rarely needed.' },
+            { t: 'Serum β-hydroxybutyrate', r: 'key', fb: 'The main ketone in DKA. Urine ketones (acetoacetate) underestimate it.' },
+            { t: 'Urine hCG', r: 'key', fb: 'Every woman of reproductive age. Pregnancy can precipitate DKA and changes management.' },
+            { t: 'ECG', r: 'key', fb: 'Potassium can be dangerously high or low. Look at the ECG before you start insulin.' },
+            { t: 'CBC', r: 'ok', fb: 'Reasonable when looking for infection, but leukocytosis is common in DKA from stress alone.' },
+            { t: 'Lipase', r: 'ok', fb: 'Reasonable with abdominal pain, but it can be nonspecifically elevated in DKA.' },
+            { t: 'CT abdomen/pelvis with contrast', r: 'waste', fb: 'Abdominal pain in DKA usually resolves with treatment. Image only if it persists after the acidosis clears.' },
+            { t: 'CT head without contrast', r: 'waste', fb: 'Her drowsiness comes from acidosis and hyperosmolality. With no focal deficit and no trauma, there is no need for a CT.' },
+          ],
+        },
+        {
+          say: `Results are back. <b>ECG:</b> sinus tachycardia at 122, flattened T waves, prominent U waves.`,
+          labs: [['Na', '131', 'L'], ['K', '3.0', 'L'], ['Cl', '96', ''], ['HCO₃', '8', 'L'], ['BUN', '28', 'H'], ['Creatinine', '1.3', 'H'],
+                 ['Glucose', '512', 'H'], ['Anion gap', '27', 'H'], ['VBG pH', '7.08', 'L'], ['β-OHB', '6.4 mmol/L', 'H'], ['Urine hCG', 'Negative', ''], ['WBC', '15.8', 'H']],
+          pick: 'one',
+          q: 'She has severe DKA. What is your first treatment?',
+          options: [
+            { t: 'IV isotonic crystalloid (0.9% saline or lactated Ringer\'s), 1–1.5 L over the first hour', r: 'best', fb: 'Volume first. She is probably 5–7 L down. Fluids restore perfusion, start lowering the glucose, and buy time to deal with her potassium.' },
+            { t: 'Regular insulin IV infusion', r: 'harm', fb: 'Look at the potassium. Insulin drives K into cells, and starting it at K 3.0 risks arrhythmias and respiratory muscle weakness. Fluids come first, and insulin waits until K ≥ 3.3.' },
+            { t: 'IV sodium bicarbonate', r: 'harm', fb: 'Not indicated unless the pH is below about 6.9–7.0. It worsens hypokalemia (already 3.0 here) and can slow ketone clearance.' },
+            { t: 'Insulin glargine SC', r: 'poor', fb: 'Long-acting SC insulin alone won\'t control severe DKA, and absorption is unreliable when she is this dry.' },
+            { t: '0.45% saline at 150 mL/h', r: 'poor', fb: 'Too little fluid, and hypotonic fluid is the wrong start. Begin with isotonic fluid, then reassess using the corrected sodium.' },
+          ],
+        },
+        {
+          say: `Fluids are running. Repeat potassium is still <b>3.0</b>.`,
+          pick: 'one',
+          q: 'What do you do about insulin?',
+          options: [
+            { t: 'Hold insulin. Give IV KCl (about 10–20 mEq/h), recheck, and start insulin once K ≥ 3.3', r: 'best', fb: 'She is total-body potassium depleted even though the number looks only mildly low. Replete first, then start insulin.' },
+            { t: 'Start an insulin drip and add 20 mEq KCl to each liter of fluid', r: 'harm', fb: 'That replacement is right when K is 3.3–5.2. Below 3.3, insulin waits.' },
+            { t: 'Start an insulin drip and recheck K in 4 hours', r: 'harm', fb: 'Within hours her potassium could fall into the low 2s, with arrhythmias and respiratory weakness.' },
+            { t: 'Give 40 mEq oral KCl and start the insulin drip', r: 'harm', fb: 'Oral K is too slow and she is vomiting. Insulin still has to wait for K ≥ 3.3.' },
+            { t: 'Give IV calcium gluconate', r: 'poor', fb: 'Calcium stabilizes the myocardium in HYPERkalemia. It does nothing for low potassium.' },
+          ],
+        },
+        {
+          say: `Two hours later her K is <b>3.6</b>. Glucose 410. She has had 2.5 L of fluid and is a little more alert.`,
+          vitals: { t: '37.2', hr: 108, bp: '108/66', rr: 26, sp: 99 },
+          pick: 'one',
+          q: 'How do you start insulin? (She weighs 60 kg.)',
+          options: [
+            { t: 'Regular insulin IV infusion at 0.1 units/kg/h (6 units/h), with 20–30 mEq KCl added to each liter of fluid', r: 'best', fb: 'Standard for severe DKA. An initial 0.1 units/kg bolus is optional. Keep replacing potassium, because insulin will push it down again.' },
+            { t: 'Regular insulin IV infusion at 0.1 units/kg/h, without added potassium', r: 'harm', fb: 'Right rate, but with K 3.6 and no replacement, insulin will drop her below 3.3 within hours.' },
+            { t: 'Regular insulin IV infusion at 1 unit/kg/h (60 units/h)', r: 'harm', fb: 'A tenfold overdose. Expect hypoglycemia and a potassium crash.' },
+            { t: 'Insulin lispro 10 units SC every 2 hours', r: 'poor', fb: 'SC rapid-acting protocols are an option in mild–moderate DKA. With a pH of 7.08 she needs an IV infusion and ICU-level monitoring.' },
+            { t: 'Keep giving fluids alone until the bicarbonate normalizes', r: 'poor', fb: 'Fluids don\'t stop ketone production. Only insulin closes the gap.' },
+          ],
+        },
+        {
+          say: `She is in the ICU. Six hours into the insulin infusion: glucose <b>236</b>, bicarbonate 13, anion gap 18, K 4.2.`,
+          vitals: { t: '37.0', hr: 98, bp: '114/70', rr: 22, sp: 99 },
+          pick: 'one',
+          q: 'What now?',
+          options: [
+            { t: 'Switch fluids to D5 + 0.45% saline and continue the insulin infusion (the rate can be lowered)', r: 'best', fb: 'Glucose corrects long before ketoacidosis does. Dextrose lets you keep giving insulin until the gap closes.' },
+            { t: 'Stop the insulin infusion, since glucose is nearly at goal', r: 'harm', fb: 'The gap is still open. Stopping insulin now restarts ketogenesis and the DKA rebounds.' },
+            { t: 'Stop the drip and start sliding-scale SC insulin', r: 'harm', fb: 'Too early. Transition only after the DKA resolves and she is eating.' },
+            { t: 'Continue the same fluids and insulin unchanged', r: 'poor', fb: 'Without dextrose her glucose will fall into hypoglycemia before the gap closes.' },
+            { t: 'Give an ampule of D50', r: 'poor', fb: 'That treats hypoglycemia she doesn\'t have yet. You want a steady dextrose infusion, not a bolus.' },
+          ],
+        },
+        {
+          say: `Next morning: anion gap <b>10</b>, bicarbonate 20, pH 7.34, glucose 168. She is hungry and keeping breakfast down.`,
+          vitals: { t: '36.9', hr: 84, bp: '118/74', rr: 16, sp: 99 },
+          pick: 'one',
+          q: 'How do you transition her off the drip?',
+          options: [
+            { t: 'Give SC basal insulin (e.g., glargine) plus mealtime insulin, and stop the IV infusion 1–2 hours later', r: 'best', fb: 'IV insulin wears off within minutes. Overlapping with basal insulin prevents rebound DKA.' },
+            { t: 'Stop the drip now and give glargine at bedtime', r: 'harm', fb: 'She makes no insulin of her own. A gap of several hours without insulin can put her straight back into DKA.' },
+            { t: 'Stop the drip and use sliding-scale insulin only', r: 'poor', fb: 'Sliding scale alone is reactive and leaves a type 1 patient with no basal insulin.' },
+            { t: 'Keep her NPO on the drip for another 24 hours', r: 'poor', fb: 'The DKA has resolved. Let her eat, then transition.' },
+          ],
+        },
+        {
+          say: `She is ready to go home.`,
+          pick: 'many',
+          q: 'What do you do before she leaves?',
+          options: [
+            { t: 'Fix insulin access (social work, manufacturer assistance, low-cost insulin programs)', r: 'key', fb: 'This is the real precipitant. If it isn\'t fixed she will be back.' },
+            { t: 'Diabetes education: sick-day rules, never stop basal insulin, check ketones when ill', r: 'key', fb: 'Most DKA readmissions trace back to missed or stopped insulin.' },
+            { t: 'Arrange endocrinology / diabetes clinic follow-up', r: 'key', fb: 'Early follow-up after DKA reduces readmissions.' },
+            { t: 'Prescribe glucagon for severe hypoglycemia', r: 'ok', fb: 'Reasonable for anyone on insulin.' },
+            { t: 'Switch her to metformin, since it\'s cheaper', r: 'harm', fb: 'Type 1 diabetes requires insulin. Metformin can\'t replace it.' },
+            { t: 'Repeat HbA1c in 2 weeks', r: 'waste', fb: 'A1c reflects about 3 months of glucose. A two-week repeat tells you nothing.' },
+          ],
+        },
+      ],
+      pearls: [
+        'Fluids first, then insulin. Check potassium before starting insulin: <b>K &lt; 3.3 → hold insulin and replete.</b>',
+        'K 3.3–5.2: add 20–30 mEq per liter of fluid. K &gt; 5.2: hold potassium and recheck every 2 h.',
+        'When glucose reaches about 200–250, add dextrose but <b>keep the insulin running until the anion gap closes.</b>',
+        'Overlap SC basal insulin 1–2 h before stopping the infusion.',
+        'Bicarbonate only for severe acidemia (pH &lt; about 6.9–7.0).',
+        'Always look for the precipitant: missed insulin, infection, MI, pregnancy.',
+      ],
+    },
+
+    {
+      id: 'varices',
+      dx: 'Acute esophageal variceal hemorrhage (alcohol-associated cirrhosis)',
+      who: '56-year-old man',
+      where: 'Emergency Department',
+      cc: 'Vomiting blood',
+      stem: `He has vomited bright red blood three times in the past hour. He drinks about 12 beers a day. Two years ago he was told he had "liver problems" but never followed up. No medications.`,
+      exam: `Alert, oriented, pale. Scleral icterus, spider angiomata on the chest, palmar erythema. Abdomen distended with shifting dullness. No asterixis. Rectal exam: black, tarry stool. Weight 78 kg.`,
+      vitals: { t: '36.8', hr: 118, bp: '92/56', rr: 20, sp: 97 },
+      steps: [
+        {
+          pick: 'many',
+          q: 'What is your immediate management?',
+          options: [
+            { t: 'Two large-bore (16–18 G) peripheral IVs', r: 'key', fb: 'Fast access is the first move in any significant GI bleed.' },
+            { t: 'Type and crossmatch 4 units of packed red cells', r: 'key', fb: 'Get blood ready before you need it.' },
+            { t: 'CBC, CMP, PT/INR', r: 'key', fb: 'Baseline hemoglobin, platelets, and liver synthetic function.' },
+            { t: 'Begin IV fluid resuscitation', r: 'key', fb: 'Restore perfusion while blood is being prepared, without over-resuscitating.' },
+            { t: 'Keep NPO', r: 'ok', fb: 'He is going to endoscopy.' },
+            { t: 'Nasogastric lavage', r: 'waste', fb: 'It doesn\'t change management and isn\'t routinely recommended.' },
+            { t: 'CT abdomen/pelvis with contrast', r: 'waste', fb: 'Endoscopy, not CT, is both the diagnostic and therapeutic test for an upper GI bleed.' },
+          ],
+        },
+        {
+          say: `Endoscopy is being arranged.`,
+          labs: [['Hemoglobin', '8.1', 'L'], ['Platelets', '74k', 'L'], ['INR', '1.6', 'H'], ['Total bilirubin', '2.4', 'H'], ['Albumin', '3.0', 'L'], ['Creatinine', '1.0', '']],
+          pick: 'many',
+          q: 'You suspect a variceal bleed. Which medications do you start before endoscopy?',
+          options: [
+            { t: 'IV octreotide (bolus, then infusion)', r: 'key', fb: 'A splanchnic vasoconstrictor that lowers portal pressure. Start it before endoscopy and continue for 2–5 days.' },
+            { t: 'IV ceftriaxone', r: 'key', fb: 'Antibiotic prophylaxis in cirrhosis with a GI bleed reduces infection, rebleeding, and death. Easy to forget.' },
+            { t: 'IV pantoprazole', r: 'ok', fb: 'Reasonable until the source is confirmed, since it could be an ulcer. Stop it once the bleed is shown to be variceal.' },
+            { t: 'IV vitamin K', r: 'ok', fb: 'Commonly given and low risk, though the benefit in cirrhosis is small.' },
+            { t: 'IV propranolol', r: 'harm', fb: 'Never during active hemorrhage with hypotension. Beta-blockers come later, once he is stable.' },
+            { t: 'FFP to correct the INR below 1.5', r: 'harm', fb: 'INR doesn\'t predict bleeding risk in cirrhosis. The extra volume raises portal pressure and can worsen variceal bleeding.' },
+          ],
+        },
+        {
+          say: `After 1.5 L of crystalloid, repeat hemoglobin is <b>6.6</b>.`,
+          vitals: { t: '36.7', hr: 110, bp: '98/60', rr: 20, sp: 97 },
+          pick: 'one',
+          q: 'What transfusion strategy do you use?',
+          options: [
+            { t: 'Transfuse packed red cells to a target hemoglobin of about 7–8', r: 'best', fb: 'A restrictive strategy lowers rebleeding and mortality in variceal hemorrhage.' },
+            { t: 'Transfuse to a target hemoglobin of 10 or higher', r: 'harm', fb: 'Over-transfusion raises portal pressure and increases rebleeding and death.' },
+            { t: 'No transfusion; keep giving crystalloid', r: 'poor', fb: 'Hemoglobin below 7 with ongoing bleeding needs blood. More crystalloid just dilutes him.' },
+            { t: 'Transfuse platelets to above 100,000', r: 'poor', fb: 'Not routinely needed. Platelets aren\'t the problem here.' },
+          ],
+        },
+        {
+          say: `Still in the ED, he vomits another 400 mL of blood. He is now drowsy, gurgling, and only intermittently follows commands.`,
+          vitals: { t: '36.6', hr: 126, bp: '88/50', rr: 24, sp: 93 },
+          pick: 'one',
+          q: 'Before endoscopy, what\'s next?',
+          options: [
+            { t: 'Intubate for airway protection', r: 'best', fb: 'Massive hematemesis plus a falling level of consciousness means a high aspiration risk. Secure the airway before EGD.' },
+            { t: 'Proceed to EGD under moderate sedation', r: 'harm', fb: 'Sedating an unprotected airway during massive hematemesis invites aspiration.' },
+            { t: 'Place a balloon tamponade tube (Minnesota or Sengstaken–Blakemore)', r: 'poor', fb: 'Tamponade is a temporary bridge for bleeding endoscopy can\'t control, and it requires a secured airway first.' },
+            { t: 'CT head for the altered mental status', r: 'poor', fb: 'The cause is obvious: shock and blood loss. Sending him to the scanner with an unprotected airway is dangerous.' },
+          ],
+        },
+        {
+          say: `He is intubated and transfused. EGD shows large esophageal varices, one with an overlying fibrin plug (the "white nipple sign").`,
+          vitals: { t: '36.8', hr: 104, bp: '102/62', rr: 16, sp: 99 },
+          pick: 'one',
+          q: 'What endoscopic treatment do you choose?',
+          options: [
+            { t: 'Endoscopic band ligation', r: 'best', fb: 'First-line endoscopic therapy for esophageal varices.' },
+            { t: 'Endoscopic sclerotherapy', r: 'ok', fb: 'It works, but it causes more complications than banding. Second choice.' },
+            { t: 'Epinephrine injection plus clips', r: 'poor', fb: 'That\'s the approach for a bleeding peptic ulcer, not varices.' },
+            { t: 'Emergency surgical portocaval shunt', r: 'poor', fb: 'Surgical shunts are rarely used now. Endoscopy plus vasoactive drugs controls most bleeds, and TIPS is the rescue.' },
+          ],
+        },
+        {
+          say: `The bleeding stops. Forty-eight hours later he is extubated and stable on octreotide and ceftriaxone.`,
+          vitals: { t: '36.9', hr: 88, bp: '112/68', rr: 14, sp: 98 },
+          pick: 'one',
+          q: 'How do you prevent a rebleed?',
+          options: [
+            { t: 'Nonselective beta-blocker (propranolol, nadolol, or carvedilol) plus repeat banding every 2–4 weeks until the varices are obliterated', r: 'best', fb: 'Combination therapy is the standard of care for secondary prophylaxis.' },
+            { t: 'Metoprolol plus repeat banding', r: 'poor', fb: 'It has to be a nonselective beta-blocker. β2 blockade causes the splanchnic vasoconstriction that lowers portal pressure.' },
+            { t: 'Nothing further, since the varices were banded', r: 'poor', fb: 'Without prophylaxis, the rebleeding risk is about 60% within 1–2 years.' },
+            { t: 'Long-term oral PPI only', r: 'poor', fb: 'A short PPI course can help post-banding ulcers. It doesn\'t prevent variceal rebleeding.' },
+          ],
+        },
+        {
+          say: `He is ready for discharge.`,
+          pick: 'many',
+          q: 'What do you do before he leaves?',
+          options: [
+            { t: 'Alcohol use disorder treatment: counseling, referral, and consider acamprosate or baclofen', r: 'key', fb: 'Abstinence is the single most important intervention in alcohol-associated cirrhosis.' },
+            { t: 'Hepatitis A and B vaccination if not immune', r: 'key', fb: 'Superimposed viral hepatitis is poorly tolerated in cirrhosis.' },
+            { t: 'Liver ultrasound (± AFP) every 6 months', r: 'key', fb: 'Hepatocellular carcinoma surveillance for all patients with cirrhosis.' },
+            { t: 'Hepatology referral', r: 'ok', fb: 'Also consider transplant evaluation, based on his MELD score and abstinence.' },
+            { t: 'For pain: acetaminophen ≤ 2 g/day is OK, avoid NSAIDs', r: 'ok', fb: 'Low-dose acetaminophen is the safest analgesic in cirrhosis.' },
+            { t: 'Ibuprofen as needed for pain', r: 'harm', fb: 'In cirrhosis, NSAIDs cause GI bleeding and kidney injury and worsen ascites.' },
+            { t: 'Annual colonoscopy', r: 'waste', fb: 'Nothing here calls for it. Follow routine colorectal screening.' },
+          ],
+        },
+      ],
+      pearls: [
+        'Cirrhosis + GI bleed: <b>octreotide + ceftriaxone</b> before endoscopy, and EGD within 12 h.',
+        'Use a restrictive transfusion target (Hgb 7–8). Don\'t chase the INR with FFP.',
+        'Protect the airway before EGD when there is massive hematemesis or altered mentation.',
+        'Banding beats sclerotherapy. For refractory bleeding: balloon tamponade as a bridge, then TIPS.',
+        'Secondary prophylaxis: a nonselective β-blocker plus serial banding.',
+        'Don\'t forget vaccines, HCC surveillance every 6 months, and alcohol treatment.',
+      ],
+    },
+
+    {
+      id: 'pe',
+      dx: 'Pulmonary embolism, intermediate-risk progressing to high-risk',
+      who: '31-year-old woman',
+      where: 'Emergency Department',
+      cc: 'Pleuritic chest pain and shortness of breath',
+      stem: `Sudden right-sided chest pain that's worse with deep breaths, plus shortness of breath since this morning. She flew home from Tokyo 3 days ago (a 13-hour flight). She takes a combined estrogen–progestin pill. Nonsmoker, no prior clots, no recent surgery.`,
+      exam: `Anxious and tachypneic. Lungs clear. Normal heart sounds, no murmur. The right calf is swollen (3 cm larger than the left) and tender. Weight 64 kg.`,
+      vitals: { t: '37.6', hr: 116, bp: '122/78', rr: 24, sp: 91 },
+      steps: [
+        {
+          pick: 'many',
+          q: 'What are your initial orders?',
+          options: [
+            { t: 'Supplemental oxygen', r: 'key', fb: 'Her SpO₂ is 91%. Titrate to 92% or higher.' },
+            { t: 'ECG', r: 'key', fb: 'Rules out ACS and looks for right heart strain. Sinus tachycardia is the most common finding.' },
+            { t: 'Chest x-ray', r: 'key', fb: 'Looks for alternatives such as pneumothorax or pneumonia. It is usually normal in PE.' },
+            { t: 'Urine hCG', r: 'key', fb: 'Needed before CT contrast and anticoagulation, and it changes the choice of drug.' },
+            { t: 'BMP (creatinine)', r: 'ok', fb: 'Useful before IV contrast and for anticoagulant dosing.' },
+            { t: 'Troponin and BNP', r: 'ok', fb: 'Not diagnostic, but key for risk-stratifying a PE.' },
+            { t: 'D-dimer', r: 'waste', fb: 'With high pretest probability a negative D-dimer can\'t rule out PE, so go straight to imaging.' },
+            { t: 'Exercise treadmill stress test', r: 'harm', fb: 'Exercise stress testing with a suspected acute PE is unsafe, and it doesn\'t answer the question.' },
+          ],
+        },
+        {
+          say: `ECG: sinus tachycardia at 116. Chest x-ray: clear. hCG negative, creatinine 0.7. SpO₂ 94% on 2 L.`,
+          vitals: { t: '37.6', hr: 114, bp: '120/76', rr: 22, sp: 94 },
+          pick: 'one',
+          q: 'Her Wells score is high (DVT signs, HR > 100, recent immobilization, PE is the most likely diagnosis). She has no bleeding risk factors. Next step?',
+          options: [
+            { t: 'Start anticoagulation (heparin infusion or LMWH) now and get a CT pulmonary angiogram', r: 'best', fb: 'With high suspicion and low bleeding risk, anticoagulate while the scan is pending.' },
+            { t: 'Get a CT pulmonary angiogram, and wait for the result before anticoagulating', r: 'ok', fb: 'Right test, but with suspicion this high you shouldn\'t wait to start treatment.' },
+            { t: 'Check a D-dimer and image only if it\'s positive', r: 'poor', fb: 'D-dimer is for low or intermediate pretest probability only.' },
+            { t: 'Give alteplase now', r: 'harm', fb: 'She is hemodynamically stable and the diagnosis isn\'t confirmed. Thrombolysis carries real risk of bleeding and stroke.' },
+          ],
+        },
+        {
+          say: `CTPA: large bilateral pulmonary emboli. RV/LV ratio 1.2 (right ventricular dilation). Troponin mildly elevated, BNP 340.`,
+          labs: [['Troponin I', '0.09 ng/mL', 'H'], ['BNP', '340 pg/mL', 'H']],
+          vitals: { t: '37.5', hr: 112, bp: '118/76', rr: 22, sp: 94 },
+          pick: 'one',
+          q: 'She is normotensive but has right ventricular strain (intermediate-high risk). How do you manage her?',
+          options: [
+            { t: 'Unfractionated heparin infusion, with ICU or step-down monitoring', r: 'best', fb: 'Anticoagulate and watch closely. UFH is preferred if you might need to escalate to thrombolysis, because you can turn it off fast.' },
+            { t: 'Systemic alteplase now', r: 'poor', fb: 'In normotensive intermediate-risk PE, lysis prevents some decompensation but causes more major bleeding and stroke, with no mortality benefit (PEITHO). Save it for hemodynamic collapse.' },
+            { t: 'Start apixaban and discharge her home', r: 'harm', fb: 'RV strain plus an elevated troponin rules out outpatient treatment.' },
+            { t: 'Place an IVC filter', r: 'poor', fb: 'Filters are only for when anticoagulation is contraindicated or has failed.' },
+          ],
+        },
+        {
+          say: `Three hours later in step-down: her BP has been <b>78/46</b> for the last 15 minutes. SpO₂ 86% on 6 L. She is cool, clammy, and confused.`,
+          vitals: { t: '37.4', hr: 138, bp: '78/46', rr: 32, sp: 86 },
+          pick: 'one',
+          q: 'What now?',
+          options: [
+            { t: 'Systemic thrombolysis: alteplase 100 mg IV over 2 hours (hold heparin during the infusion)', r: 'best', fb: 'Sustained hypotension means high-risk (massive) PE. Thrombolysis is indicated unless there is an absolute contraindication.' },
+            { t: 'Give a 3 L normal saline bolus', r: 'harm', fb: 'The failing RV is already dilated. Big boluses push the septum into the LV and lower output further. Give at most a cautious 500 mL; norepinephrine is the pressor of choice.' },
+            { t: 'Increase the heparin to a higher aPTT goal', r: 'poor', fb: 'More heparin doesn\'t dissolve the existing clot fast enough to reverse shock.' },
+            { t: 'Take her for a repeat CTPA', r: 'poor', fb: 'Don\'t send an unstable patient to the scanner. The diagnosis is already known.' },
+            { t: 'Place an IVC filter', r: 'poor', fb: 'A filter catches future clots. It does nothing for the clot that is causing shock now.' },
+          ],
+        },
+        {
+          say: `After alteplase her BP rises to 112/70 and her oxygen requirement falls. By hospital day 4 she is walking the halls.`,
+          vitals: { t: '36.9', hr: 88, bp: '112/70', rr: 16, sp: 97 },
+          pick: 'one',
+          q: 'What is the long-term plan?',
+          options: [
+            { t: 'Stop the estrogen pill, anticoagulate (e.g., with a DOAC) for at least 3 months, and offer non-estrogen contraception such as an IUD', r: 'best', fb: 'A PE provoked by estrogen and a long flight gets at least 3 months of treatment. DOACs can harm a fetus, so she needs reliable contraception.' },
+            { t: 'Continue her pill and anticoagulate for 3 months', r: 'poor', fb: 'Estrogen raises VTE risk. It should be stopped.' },
+            { t: 'Indefinite anticoagulation', r: 'poor', fb: 'A provoked first VTE usually gets 3 months. Indefinite therapy is for unprovoked or recurrent clots, or persistent risk factors.' },
+            { t: 'Send a full thrombophilia panel now to decide the duration', r: 'poor', fb: 'Testing during an acute clot or on anticoagulation is unreliable, and it rarely changes management in provoked VTE.' },
+            { t: 'Aspirin 81 mg instead of anticoagulation', r: 'poor', fb: 'Aspirin is not a treatment for an acute PE.' },
+          ],
+        },
+      ],
+      pearls: [
+        'High pretest probability: <b>skip the D-dimer and image.</b> If bleeding risk is low, anticoagulate while you wait.',
+        'Risk-stratify with blood pressure, RV size (CT or echo), and troponin/BNP.',
+        '<b>Hypotension → systemic thrombolysis.</b> Normotensive with RV strain → anticoagulate and monitor closely.',
+        'In RV failure, go easy on fluids. Norepinephrine is the pressor of choice.',
+        'Provoked VTE: at least 3 months of anticoagulation, and stop estrogen.',
+      ],
+    },
+
+    {
+      id: 'preeclampsia',
+      dx: 'Preeclampsia with severe features, complicated by magnesium toxicity',
+      who: '24-year-old woman, G1P0 at 35w2d',
+      where: 'Labor & Delivery triage',
+      cc: 'Headache and seeing "sparkles"',
+      stem: `Six hours of headache not relieved by acetaminophen, and she is seeing "sparkles." Her hands and face have been swelling for a week. Her prenatal course has been uncomplicated; BP at 32 weeks was 118/74.`,
+      exam: `Uncomfortable but alert. No RUQ tenderness. 2+ pitting edema of the legs and hands. Reflexes 3+ with 2 beats of ankle clonus. Fetal heart tracing: baseline 140, moderate variability, accelerations, no decelerations (category I). Weight 82 kg.`,
+      vitals: { t: '37.0', hr: 92, bp: '168/112', rr: 16, sp: 98 },
+      labs: [['Repeat BP (15 min)', '172/110', 'H']],
+      steps: [
+        {
+          pick: 'many',
+          q: 'What is your initial workup?',
+          options: [
+            { t: 'CBC (platelets)', r: 'key', fb: 'Platelets below 100k are a severe feature, and part of HELLP.' },
+            { t: 'Creatinine and liver enzymes (AST/ALT)', r: 'key', fb: 'Renal insufficiency and transaminitis are both severe features.' },
+            { t: 'Urine protein-to-creatinine ratio', r: 'key', fb: 'A spot ratio ≥ 0.3 confirms proteinuria. There\'s no need to wait 24 hours.' },
+            { t: 'Continuous fetal heart rate monitoring', r: 'key', fb: 'Two patients. Watch both.' },
+            { t: 'LDH and peripheral smear', r: 'ok', fb: 'Screens for hemolysis (HELLP).' },
+            { t: 'CT head without contrast', r: 'waste', fb: 'Headache and visual symptoms with severe-range BP are preeclampsia until proven otherwise. Image only for focal deficits or symptoms that don\'t respond to treatment.' },
+            { t: '24-hour urine protein before starting treatment', r: 'waste', fb: 'Slow, and it doesn\'t change today\'s management. Treatment can\'t wait.' },
+          ],
+        },
+        {
+          labs: [['Platelets', '132k', 'L'], ['AST', '46', 'H'], ['ALT', '51', 'H'], ['Creatinine', '0.9', ''], ['Urine prot/Cr', '1.4', 'H']],
+          pick: 'many',
+          q: 'This is preeclampsia with severe features (severe-range BP plus headache and visual symptoms). What do you give now?',
+          options: [
+            { t: 'An antihypertensive within 30–60 minutes: IV labetalol, IV hydralazine, or immediate-release oral nifedipine', r: 'key', fb: 'Persistent BP ≥ 160/110 is an emergency. Treat it to reduce the risk of maternal stroke.' },
+            { t: 'IV magnesium sulfate (loading dose, then maintenance infusion)', r: 'key', fb: 'Seizure prophylaxis for preeclampsia with severe features.' },
+            { t: 'IV furosemide for the edema', r: 'harm', fb: 'Preeclamptic patients are intravascularly depleted despite their edema. Diuresis worsens placental perfusion.' },
+            { t: 'IV enalaprilat', r: 'harm', fb: 'ACE inhibitors are contraindicated in pregnancy because of fetal renal toxicity.' },
+            { t: 'Phenytoin for seizure prophylaxis', r: 'waste', fb: 'Magnesium is superior to phenytoin for preventing eclampsia.' },
+            { t: 'Start low-dose aspirin', r: 'waste', fb: 'Aspirin is prophylaxis started at 12–28 weeks (ideally before 16) in high-risk pregnancies. It does nothing now.' },
+          ],
+        },
+        {
+          say: `After two doses of labetalol her BP is <b>148/96</b>. Magnesium is running and her headache is improving. The fetal tracing remains category I.`,
+          vitals: { t: '37.0', hr: 84, bp: '148/96', rr: 16, sp: 98 },
+          pick: 'one',
+          q: 'She is 35w2d. What is the delivery plan?',
+          options: [
+            { t: 'Deliver once she is stable. Induction of labor is reasonable; cesarean only for the usual obstetric indications', r: 'best', fb: 'At ≥ 34 weeks, preeclampsia with severe features means delivery. Vaginal delivery is preferred when feasible.' },
+            { t: 'Expectant management until 37 weeks', r: 'harm', fb: 'With severe features, expectant management is considered only before 34 weeks, at a tertiary center. At 35 weeks, deliver.' },
+            { t: 'Immediate cesarean delivery', r: 'poor', fb: 'Severe preeclampsia isn\'t an indication for cesarean by itself. With a reassuring tracing, induction is appropriate.' },
+            { t: 'Give betamethasone and deliver after 48 hours', r: 'poor', fb: 'At ≥ 34 weeks with severe features, don\'t delay delivery for steroids.' },
+          ],
+        },
+        {
+          say: `Ten hours into the induction (magnesium at 2 g/h), her nurse calls. Respiratory rate <b>8</b>, patellar reflexes absent, and she is very drowsy. Urine output has been 15 mL/h for 3 hours, and creatinine is now 1.6.`,
+          vitals: { t: '36.9', hr: 76, bp: '142/90', rr: 8, sp: 91 },
+          pick: 'one',
+          q: 'What do you do?',
+          options: [
+            { t: 'Stop the magnesium and give IV calcium gluconate (1 g)', r: 'best', fb: 'Classic magnesium toxicity, made worse by falling urine output, since Mg is renally cleared. Calcium antagonizes it at the neuromuscular junction. Support the airway as needed.' },
+            { t: 'Increase the magnesium, since she may be postictal', r: 'harm', fb: 'There was no seizure. Areflexia and respiratory depression mean toxicity.' },
+            { t: 'Continue the magnesium and recheck a level in 4 hours', r: 'harm', fb: 'Her next stop is respiratory arrest. Stop the infusion now.' },
+            { t: 'Give naloxone', r: 'poor', fb: 'She hasn\'t had opioids. The cause is the magnesium.' },
+          ],
+        },
+        {
+          say: `Her Mg level was 11.8 mg/dL. After calcium and holding the infusion she wakes up and breathes normally. Magnesium is resumed at a lower rate, guided by levels and urine output. She delivers a healthy boy vaginally.`,
+          vitals: { t: '37.1', hr: 88, bp: '146/92', rr: 16, sp: 98 },
+          pick: 'one',
+          q: 'How long do you continue magnesium?',
+          options: [
+            { t: '24 hours after delivery', r: 'best', fb: 'Eclampsia can occur postpartum, most often in the first 48 hours. Standard practice is 24 hours of magnesium after delivery.' },
+            { t: 'Stop it at delivery', r: 'poor', fb: 'Too early. Roughly a third of eclamptic seizures happen postpartum.' },
+            { t: 'Until discharge', r: 'poor', fb: 'Longer than needed. 24 hours is standard.' },
+            { t: 'Oral magnesium for 6 weeks', r: 'poor', fb: 'Oral magnesium does not prevent eclampsia.' },
+          ],
+        },
+        {
+          say: `Postpartum day 2. BP 138/88 on oral labetalol. She feels well and is breastfeeding.`,
+          vitals: { t: '36.8', hr: 80, bp: '138/88', rr: 14, sp: 99 },
+          pick: 'many',
+          q: 'What belongs in her discharge plan?',
+          options: [
+            { t: 'Blood pressure check within 72 hours of discharge', r: 'key', fb: 'Postpartum BP often peaks 3–6 days after delivery. Severe hypertension warrants a check within 72 h.' },
+            { t: 'Warning signs: return for headache, visual changes, chest pain, or shortness of breath (preeclampsia can occur up to 6 weeks postpartum)', r: 'key', fb: 'Postpartum preeclampsia and eclampsia are easy to miss.' },
+            { t: 'Next pregnancy: low-dose aspirin starting at 12–16 weeks', r: 'key', fb: 'Lowers the recurrence risk. Start by 16 weeks if possible (it can begin up to 28).' },
+            { t: 'Counsel on long-term cardiovascular risk, with yearly BP, lipids, and glucose', r: 'ok', fb: 'Preeclampsia roughly doubles future cardiovascular disease risk.' },
+            { t: 'Stop breastfeeding while on labetalol', r: 'harm', fb: 'Labetalol and nifedipine are compatible with breastfeeding.' },
+            { t: 'Start a combined estrogen–progestin pill now', r: 'harm', fb: 'Combined hormonal contraception is contraindicated in the first 21 days postpartum and needs caution with hypertension. Progestin-only methods or an IUD are better.' },
+          ],
+        },
+      ],
+      pearls: [
+        'Severe features: BP ≥ 160/110, platelets &lt; 100k, Cr &gt; 1.1 or doubled, LFTs 2× normal, pulmonary edema, headache, visual changes.',
+        'Treat severe-range BP within 30–60 min with labetalol, hydralazine, or oral nifedipine.',
+        'Magnesium for seizure prophylaxis. Toxicity progresses <b>areflexia → respiratory depression → cardiac arrest</b>. The antidote is calcium gluconate.',
+        'At ≥ 34 weeks with severe features: stabilize, then deliver.',
+        'Continue Mg for 24 h postpartum. Next pregnancy: aspirin starting at 12–16 weeks.',
+      ],
+    },
+  ];
+
+  const CASE_BY_ID = Object.fromEntries(CASES.map(c => [c.id, c]));
+
+  // ═══════════════════════════════════════════════════════════════
+  // SCORING
+  // ═══════════════════════════════════════════════════════════════
+
+  const ROLE = {
+    best:  { label: 'Best',        sq: '🟩', c: 1 },
+    ok:    { label: 'Acceptable',  sq: '🟨', c: 0.5 },
+    poor:  { label: 'Not ideal',   sq: '🟧', c: 0 },
+    harm:  { label: 'Harmful',     sq: '🟥', c: 0 },
+    key:   { label: 'Key' },
+    waste: { label: 'Unnecessary' },
+  };
+  const ROLE_MANY = { key: 'Key', ok: 'Reasonable', waste: 'Unnecessary', harm: 'Harmful' };
+
+  function scoreStep(step, sel) {
+    if (step.pick === 'one') {
+      const r = step.options[sel[0]].r;
+      return { c: ROLE[r].c, cls: r, sq: ROLE[r].sq };
+    }
+    const keys = step.options.filter(o => o.r === 'key').length;
+    const picked = sel.map(i => step.options[i].r);
+    const hit = picked.filter(r => r === 'key').length;
+    const waste = picked.filter(r => r === 'waste').length;
+    const harm = picked.filter(r => r === 'harm').length;
+    const c = Math.max(0, Math.min(1, hit / keys - 0.25 * waste - 0.5 * harm));
+    const cls = harm ? 'harm' : c >= 0.999 ? 'best' : c >= 0.5 ? 'ok' : 'poor';
+    return { c, cls, sq: ROLE[cls].sq, hit, keys, waste, harm };
+  }
+
+  function totalScore(cs, answers) {
+    const sum = answers.reduce((a, sel, i) => a + scoreStep(cs.steps[i], sel).c, 0);
+    return Math.round(100 * sum / cs.steps.length);
+  }
+
+  const GRADES = [
+    [95, 'Attending-level management'],
+    [85, 'Strong senior resident'],
+    [70, 'Solid intern'],
+    [50, 'Needs a little supervision'],
+    [30, 'Call your senior'],
+    [0,  'The patient would like a second opinion'],
+  ];
+  const gradeFor = s => GRADES.find(([n]) => s >= n)[1];
+
+  // ═══════════════════════════════════════════════════════════════
+  // DAILY SELECTION & PRNG
+  // ═══════════════════════════════════════════════════════════════
+
+  function mulberry32(seed) {
+    return function() {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function hashStr(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  // Stable display order so the best answer isn't always first (and resumes match)
+  function optionOrder(caseId, stepIdx, n) {
+    const rnd = mulberry32(hashStr(`${caseId}:${stepIdx}`));
+    const idx = [...Array(n).keys()];
+    for (let i = n - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    return idx;
+  }
+
+  function getDayIndex() {
+    const n = new Date();
+    return Math.max(0, Math.floor(
+      (Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()) - LAUNCH_UTC) / 86400000
+    ));
+  }
+  const caseForDay = d => CASES[d % CASES.length];
+
+  // ═══════════════════════════════════════════════════════════════
+  // STORAGE
+  // ═══════════════════════════════════════════════════════════════
+
+  const STORE_KEY   = 'rounds_v1';
+  const VISITED_KEY = 'rounds_visited';
+  const progressKey = d => `rounds_progress_${d}`;
+  const postedKey   = d => `rounds_posted_${d}`;
+
+  function lsGet(k, fallback) {
+    try { const v = localStorage.getItem(k); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
+  }
+  function lsSet(k, v) {
+    if (TEST_MODE) return;
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+  }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch {} }
+
+  function loadHistory() { return lsGet(STORE_KEY, []); }
+  function saveResult(entry) {
+    const h = loadHistory();
+    const i = h.findIndex(e => e.dayIndex === entry.dayIndex);
+    if (i >= 0) h[i] = entry; else h.unshift(entry);
+    lsSet(STORE_KEY, h.slice(0, 365));
+  }
+  function computeDayStreak(dayIndex) {
+    const days = new Set(loadHistory().map(e => e.dayIndex));
+    let streak = 0;
+    for (let d = dayIndex; days.has(d); d--) streak++;
+    return streak;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // UI HELPERS
+  // ═══════════════════════════════════════════════════════════════
+
+  const $ = id => document.getElementById(id);
+  function setState(s) { document.body.setAttribute('data-state', s); }
+  function showToast(msg, ms = 2400) {
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => t.classList.remove('show'), ms);
+  }
+  function openModal(id)  { $(id).classList.add('open'); }
+  function closeModal(id) { $(id).classList.remove('open'); }
+  function el(tag, cls, html) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html != null) e.innerHTML = html;
+    return e;
+  }
+  function labsHtml(labs) {
+    return `<div class="labs">${labs.map(([k, v, f]) =>
+      `<div><span class="k">${k}</span><span class="v ${f || ''}">${v}</span></div>`).join('')}</div>`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GAME
+  // ═══════════════════════════════════════════════════════════════
+
+  let game = null; // { cs, dayIndex, puzzleNum, practice, answers: [[optIdx...]] }
+
+  function renderMonitor(v, prev) {
+    const cells = [
+      ['hr', 'HR', v.hr], ['bp', 'BP', v.bp], ['rr', 'RR', v.rr], ['sp', 'SpO₂', v.sp + '%'], ['tmp', 'TEMP', v.t + '°'],
+    ];
+    const pv = prev ? { hr: prev.hr, bp: prev.bp, rr: prev.rr, sp: prev.sp + '%', tmp: prev.t + '°' } : {};
+    $('monitor').innerHTML = cells.map(([k, l, val]) =>
+      `<div class="vital ${k}"><div class="lbl">${l}</div><div class="val ${prev && pv[k] !== val ? 'changed' : ''}">${val}</div></div>`
+    ).join('');
+  }
+
+  function vitalsAt(cs, stepIdx) {
+    let v = cs.vitals;
+    for (let i = 0; i <= Math.min(stepIdx, cs.steps.length - 1); i++) if (cs.steps[i].vitals) v = cs.steps[i].vitals;
+    return v;
+  }
+
+  function renderProgress() {
+    const { cs, answers } = game;
+    $('progress').innerHTML = cs.steps.map((st, i) => {
+      if (i < answers.length) return `<span class="${scoreStep(st, answers[i]).cls}"></span>`;
+      return `<span class="${i === answers.length ? 'cur' : ''}"></span>`;
+    }).join('');
+  }
+
+  function renderIntro(cs) {
+    const b = el('div', 'card chart-block');
+    b.innerHTML = `
+      <div class="eyebrow">Presentation</div>
+      <p>${cs.stem}</p>
+      <div class="sec"><div class="sec-lbl">Exam</div><p>${cs.exam}</p></div>
+      ${cs.labs ? `<div class="sec">${labsHtml(cs.labs)}</div>` : ''}`;
+    return b;
+  }
+
+  function renderStep(i) {
+    const { cs } = game;
+    const st = cs.steps[i];
+    const card = el('div', 'card chart-block step');
+    card.id = `step-${i}`;
+    const order = optionOrder(cs.id, i, st.options.length);
+    card.innerHTML = `
+      <div class="step-head"><div class="eyebrow">Decision ${i + 1} of ${cs.steps.length}</div><div class="step-sq"></div></div>
+      ${st.say ? `<div class="say">${st.say}</div>` : ''}
+      ${st.labs ? labsHtml(st.labs) : ''}
+      <div class="q">${st.q}</div>
+      <div class="pick-hint">${st.pick === 'one' ? 'Choose one.' : 'Select all that apply.'}</div>
+      <div class="opts ${st.pick}">${order.map(oi =>
+        `<button class="opt" data-i="${oi}"><span class="otext">${st.options[oi].t}</span></button>`).join('')}</div>
+      <div class="confirm-row"><button class="btn btn-primary btn-block" disabled>Confirm</button></div>`;
+    return card;
+  }
+
+  function wireStep(card, i) {
+    const st = game.cs.steps[i];
+    const btn = card.querySelector('.confirm-row .btn');
+    const opts = [...card.querySelectorAll('.opt')];
+    opts.forEach(o => o.onclick = () => {
+      if (st.pick === 'one') opts.forEach(x => x.classList.toggle('sel', x === o));
+      else o.classList.toggle('sel');
+      btn.disabled = !opts.some(x => x.classList.contains('sel'));
+    });
+    btn.onclick = () => {
+      const sel = opts.filter(x => x.classList.contains('sel')).map(x => +x.dataset.i);
+      answer(i, sel);
+    };
+  }
+
+  function lockStep(card, i, sel) {
+    const st = game.cs.steps[i];
+    const res = scoreStep(st, sel);
+    card.querySelector('.step-sq').textContent = res.sq;
+    card.querySelectorAll('.opt').forEach(o => {
+      const oi = +o.dataset.i, opt = st.options[oi];
+      const picked = sel.includes(oi);
+      o.classList.add('locked', `r-${opt.r}`);
+      o.classList.toggle('sel', picked);
+      o.onclick = null;
+      const label = st.pick === 'one' ? ROLE[opt.r].label : ROLE_MANY[opt.r];
+      o.innerHTML = `<span class="tag ${opt.r}">${label}</span>${picked ? '<span class="you">Your pick</span>' : ''}<br>`
+        + `<span class="otext">${opt.t}</span><span class="ofb">${opt.fb}</span>`;
+    });
+    const row = card.querySelector('.confirm-row');
+    let verdict;
+    if (st.pick === 'one') {
+      verdict = { best: 'Best answer.', ok: 'Acceptable, but not the best answer.', poor: 'Not the best choice.', harm: 'Harmful choice.' }[res.cls];
+    } else {
+      const bits = [`${res.hit} of ${res.keys} key items`];
+      if (res.waste) bits.push(`${res.waste} unnecessary`);
+      if (res.harm) bits.push(`${res.harm} harmful`);
+      verdict = bits.join(' · ');
+    }
+    row.outerHTML = `<div class="verdict ${res.cls}">${res.sq} ${verdict}</div>`;
+  }
+
+  function startCase() {
+    const { cs } = game;
+    $('bn-who').textContent = cs.who;
+    $('bn-where').textContent = cs.where;
+    const feed = $('feed');
+    feed.innerHTML = '';
+    feed.appendChild(renderIntro(cs));
+    // Replay answered steps (resume, or results review)
+    game.answers.forEach((sel, i) => {
+      const card = renderStep(i);
+      feed.appendChild(card);
+      lockStep(card, i, sel);
+    });
+    renderProgress();
+    renderMonitor(vitalsAt(cs, game.answers.length));
+    if (game.answers.length < cs.steps.length) {
+      setState('playing');
+      showStep(game.answers.length, game.answers.length > 0);
+    } else {
+      finish();
+    }
+  }
+
+  function showStep(i, scroll) {
+    const card = renderStep(i);
+    $('feed').appendChild(card);
+    wireStep(card, i);
+    if (scroll) requestAnimationFrame(() => {
+      const y = card.getBoundingClientRect().top + scrollY - document.querySelector('.monitor-wrap').offsetHeight - 70;
+      scrollTo({ top: y, behavior: 'smooth' });
+    });
+  }
+
+  function answer(i, sel) {
+    const { cs } = game;
+    game.answers.push(sel);
+    if (!game.practice) lsSet(progressKey(game.dayIndex), { caseId: cs.id, answers: game.answers });
+    const card = $(`step-${i}`);
+    lockStep(card, i, sel);
+    renderProgress();
+    const next = el('div', 'confirm-row');
+    const last = i === cs.steps.length - 1;
+    next.innerHTML = `<button class="btn btn-primary btn-block">${last ? 'See results' : 'Continue'}</button>`;
+    card.appendChild(next);
+    next.querySelector('.btn').onclick = () => {
+      next.remove();
+      if (last) { finish(); scrollTo({ top: 0, behavior: 'smooth' }); return; }
+      const prev = vitalsAt(cs, i);
+      renderMonitor(vitalsAt(cs, i + 1), prev);
+      showStep(i + 1, true);
+    };
+  }
+
+  function finish() {
+    const { cs, answers } = game;
+    const score = totalScore(cs, answers);
+    const squares = answers.map((sel, i) => scoreStep(cs.steps[i], sel).sq).join('');
+    const entry = { dayIndex: game.dayIndex, puzzleNum: game.puzzleNum, caseId: cs.id, score, squares, answers };
+    if (!game.practice) {
+      if (!loadHistory().some(e => e.dayIndex === entry.dayIndex)) saveResult(entry);
+      lsDel(progressKey(game.dayIndex));
+      postScore(game.dayIndex, score);
+    }
+    showResults(entry);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // RESULTS & SHARE
+  // ═══════════════════════════════════════════════════════════════
+
+  function buildShareText(entry) {
+    const head = game.practice ? '🩺 Rounds (practice)' : `🩺 Rounds #${entry.puzzleNum}`;
+    return `${head} — ${entry.score}/100\n${entry.squares}\n${SHARE_URL}`;
+  }
+
+  function share(text) {
+    if (navigator.share) navigator.share({ text }).catch(err => { if (err && err.name !== 'AbortError') copyText(text); });
+    else copyText(text);
+  }
+  function copyText(text) {
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!'));
+    else {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      showToast('Copied to clipboard!');
+    }
+  }
+
+  function showResults(entry) {
+    const { cs } = game;
+    $('res-label').textContent = game.practice ? 'Practice case' : `Case #${entry.puzzleNum}`;
+    $('res-score').textContent = entry.score;
+    $('res-grade').textContent = gradeFor(entry.score);
+    $('res-dx').innerHTML = `Diagnosis: <b>${cs.dx}</b>`;
+    $('res-grid').textContent = entry.squares;
+    $('res-pearls').innerHTML = cs.pearls.map(p => `<li>${p}</li>`).join('');
+
+    const hist = loadHistory();
+    const scores = hist.map(e => e.score);
+    $('st-played').textContent = scores.length;
+    $('st-avg').textContent = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+    $('st-best').textContent = scores.length ? Math.max(...scores) : 0;
+    $('st-days').textContent = computeDayStreak(getDayIndex());
+    $('stats-block').style.display = game.practice ? 'none' : '';
+    $('next-in').style.display = game.practice ? 'none' : '';
+    $('btn-back-daily').style.display = game.practice ? '' : 'none';
+
+    $('btn-share').onclick = () => share(buildShareText(entry));
+    $('btn-copy').onclick = () => copyText(buildShareText(entry));
+
+    if (game.practice) $('community').style.display = 'none';
+    else loadCommunityStats(entry.dayIndex, entry.score);
+    setState('result');
+  }
+
+  function tickCountdown() {
+    const now = Date.now();
+    const next = Math.floor(now / 86400000) * 86400000 + 86400000;
+    const s = Math.max(0, Math.floor((next - now) / 1000));
+    const pad = n => String(n).padStart(2, '0');
+    $('next-in').innerHTML = `Next case in <strong>${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}</strong>`;
+  }
+
+  function renderHistory() {
+    const hist = loadHistory();
+    const box = $('hist-list');
+    if (!hist.length) { box.innerHTML = '<p style="color:var(--text-dim);font-size:0.88rem">No cases yet.</p>'; return; }
+    box.innerHTML = hist.slice(0, 60).map(e => `<div class="hist-item">
+      <div class="hi-num">#${e.puzzleNum}</div><div class="hi-grid">${e.squares}</div><div class="hi-score">${e.score}</div></div>`).join('');
+  }
+
+  function renderPracticeList() {
+    $('practice-list').innerHTML = CASES.map(c =>
+      `<button class="case-pick" data-id="${c.id}"><div class="who">${c.who}</div><div class="cc">${c.where} · ${c.cc}</div></button>`
+    ).join('');
+    $('practice-list').querySelectorAll('.case-pick').forEach(b => b.onclick = () => {
+      closeModal('modal-practice');
+      game = { cs: CASE_BY_ID[b.dataset.id], dayIndex: getDayIndex(), puzzleNum: null, practice: true, answers: [] };
+      scrollTo({ top: 0 });
+      startCase();
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COMMUNITY STATS (Supabase)
+  // ═══════════════════════════════════════════════════════════════
+
+  const BUCKETS = [
+    { label: '0–49',   test: n => n < 50 },
+    { label: '50–69',  test: n => n >= 50 && n < 70 },
+    { label: '70–84',  test: n => n >= 70 && n < 85 },
+    { label: '85–94',  test: n => n >= 85 && n < 95 },
+    { label: '95–100', test: n => n >= 95 },
+  ];
+
+  function postScore(dayIndex, score) {
+    if (!SUPABASE_URL || TEST_MODE || lsGet(postedKey(dayIndex), false)) return;
+    fetch(`${SUPABASE_URL}/rest/v1/scores`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ day_index: dayIndex + STATS_DAY_OFFSET, grade: String(score) })
+    }).then(r => { if (r.ok) lsSet(postedKey(dayIndex), true); }).catch(() => {});
+  }
+
+  async function loadCommunityStats(dayIndex, myScore) {
+    const wrap = $('community');
+    if (!SUPABASE_URL || TEST_MODE) { wrap.style.display = 'none'; return; }
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/scores?day_index=eq.${dayIndex + STATS_DAY_OFFSET}&select=grade`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (!res.ok) throw new Error(res.status);
+      const scores = (await res.json()).map(r => parseInt(r.grade, 10)).filter(n => !isNaN(n));
+      if (!scores.length) { wrap.style.display = 'none'; return; }
+      $('community-chart').innerHTML = BUCKETS.map(b => {
+        const n = scores.filter(b.test).length;
+        const pct = Math.round(n / scores.length * 100);
+        return `<div class="community-row"><div class="community-lbl">${b.label}</div>
+          <div class="community-bar-bg"><div class="community-bar ${b.test(myScore) ? 'player' : ''}" style="width:${n ? Math.max(pct, 5) : 0}%"></div></div>
+          <div class="community-pct">${pct}% (${n})</div></div>`;
+      }).join('');
+      const beat = scores.filter(s => s < myScore).length;
+      $('community-note').textContent = scores.length > 1
+        ? `${scores.length} players today · you beat ${Math.round(beat / scores.length * 100)}% of them`
+        : `${scores.length} player today`;
+      wrap.style.display = '';
+    } catch {
+      wrap.style.display = 'none';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BOOT
+  // ═══════════════════════════════════════════════════════════════
+
+  function loadDaily() {
+    const dayIndex = getDayIndex();
+    const cs = TEST_MODE ? CASES[Math.floor(Math.random() * CASES.length)] : caseForDay(dayIndex);
+    game = { cs, dayIndex, puzzleNum: dayIndex + 1, practice: TEST_MODE, answers: [] };
+
+    const done = !TEST_MODE && loadHistory().find(e => e.dayIndex === dayIndex);
+    const prog = !TEST_MODE && lsGet(progressKey(dayIndex), null);
+    if (prog && prog.caseId === cs.id) game.answers = prog.answers;
+    return done;
+  }
+
+  function showStart() {
+    const { cs } = game;
+    $('start-sub').textContent = TEST_MODE ? 'Test mode: random case' : `Daily case #${game.puzzleNum}`;
+    $('pv-who').textContent = cs.who;
+    $('pv-where').textContent = cs.where;
+    $('pv-cc').textContent = cs.cc;
+    $('btn-start').textContent = game.answers.length ? `Resume (decision ${game.answers.length + 1})` : 'Start case';
+    setState('start');
+  }
+
+  function init() {
+    $('puzzle-num').innerHTML = TEST_MODE ? '<span class="test-badge">Test mode</span>' : `#${getDayIndex() + 1}`;
+
+    document.querySelectorAll('.overlay').forEach(o => {
+      o.addEventListener('click', e => {
+        if (e.target === o || e.target.closest('[data-close]')) o.classList.remove('open');
+      });
+    });
+    $('btn-help').onclick = () => openModal('modal-help');
+    $('btn-stats').onclick = () => { renderHistory(); openModal('modal-stats'); };
+    const openPractice = () => { renderPracticeList(); openModal('modal-practice'); };
+    $('btn-practice-start').onclick = openPractice;
+    $('btn-practice-res').onclick = openPractice;
+    $('btn-back-daily').onclick = () => { scrollTo({ top: 0 }); boot(); };
+    $('btn-start').onclick = () => { lsSet(VISITED_KEY, true); startCase(); };
+
+    tickCountdown();
+    setInterval(tickCountdown, 1000);
+
+    if (!TEST_MODE && !lsGet(VISITED_KEY, false)) openModal('modal-help');
+    boot();
+  }
+
+  function boot() {
+    const done = loadDaily();
+    if (done) {
+      // Rebuild the case review from the saved answers
+      game.answers = done.answers || [];
+      if (game.answers.length === game.cs.steps.length) { startCase(); return; }
+      $('feed').innerHTML = '';
+      showResults(done);
+      return;
+    }
+    showStart();
+  }
+
+  init();
+</script>
+</body>
+</html>

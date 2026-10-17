@@ -1,0 +1,2385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+  <title>Orders</title>
+  <meta name="description" content="A daily CCS-style patient simulation. Type orders, advance the clock, keep the patient alive.">
+  <meta property="og:title" content="Orders">
+  <meta property="og:description" content="A daily CCS-style patient simulation. Type orders, advance the clock, keep the patient alive.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://directional.global/orders">
+  <meta name="twitter:card" content="summary">
+  <style>
+    :root {
+      --bg: #f2f5f7;
+      --surface: #ffffff;
+      --surface2: #f6f8fa;
+      --border: #dce3ea;
+      --text: #15202b;
+      --text-dim: #5e6e7e;
+      --accent: #0d7a87;
+      --accent-soft: #e1f2f4;
+      --good: #23945a;
+      --good-soft: #e3f5ea;
+      --ok: #c99700;
+      --ok-soft: #fbf3d9;
+      --bad: #d23f3f;
+      --bad-soft: #fbe5e5;
+      --warn: #e07a22;
+      --warn-soft: #fdeedf;
+      --mon-bg: #0b1217;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1116;
+        --surface: #131b22;
+        --surface2: #19232c;
+        --border: #26333e;
+        --text: #e2e9ef;
+        --text-dim: #8a9aaa;
+        --accent: #2db0c0;
+        --accent-soft: #14313a;
+        --good-soft: #143223;
+        --ok-soft: #3a3110;
+        --bad-soft: #3d1a1a;
+        --warn-soft: #3b2614;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+    }
+    b, strong { font-weight: 650; }
+    .dim { color: var(--text-dim); }
+
+    /* ── HEADER ──────────────────────────────────── */
+    header { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--border); }
+    .hdr-inner {
+      max-width: 720px; margin: 0 auto; padding: 10px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { font-size: 1.5rem; line-height: 1; }
+    .logo-name { font-size: 1rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+    .puzzle-num { font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.08em; }
+    .test-badge { color: var(--warn); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+    .header-btns { display: flex; gap: 8px; }
+    .icon-btn {
+      width: 36px; height: 36px; border-radius: 8px; cursor: pointer;
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      font-size: 1rem; display: flex; align-items: center; justify-content: center;
+    }
+
+    main { max-width: 720px; margin: 0 auto; padding: 12px 16px 24px; }
+
+    /* ── STATE MACHINE ───────────────────────────── */
+    .panel, #dock { display: none; }
+    body[data-state="start"]   #panel-start  { display: block; }
+    body[data-state="playing"] #panel-case   { display: block; }
+    body[data-state="playing"] #dock         { display: block; }
+    body[data-state="result"]  #panel-result { display: block; }
+    body[data-state="result"]  #panel-case   { display: block; }
+    body[data-state="result"]  .case-top     { display: none; }
+    body[data-state="loading"] main::before  { content: 'Loading…'; color: var(--text-dim); }
+
+    /* ── CARDS / BUTTONS ─────────────────────────── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+    .eyebrow { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
+    .btn {
+      font-family: inherit; font-size: 0.92rem; font-weight: 600; border-radius: 10px;
+      padding: 12px 18px; cursor: pointer; border: 1px solid transparent; color: var(--text);
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:hover:not(:disabled) { opacity: 0.88; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-secondary { background: var(--surface2); border-color: var(--border); }
+    .btn-danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+    .btn-block { width: 100%; }
+    .btn-row { display: flex; gap: 10px; }
+    .btn-row .btn { flex: 1; }
+    .link-btn { background: none; border: none; color: var(--accent); font: inherit; font-size: 0.85rem; cursor: pointer; text-decoration: underline; padding: 4px; }
+
+    /* ── START ───────────────────────────────────── */
+    .start-card { text-align: center; padding: 26px 20px; }
+    .start-title { font-size: 1.6rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+    .start-sub { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 18px; }
+    .pt-preview { text-align: left; background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+    .pt-preview .who { font-size: 1.1rem; font-weight: 700; }
+    .pt-preview .where { font-size: 0.82rem; color: var(--text-dim); }
+    .pt-preview .cc { margin-top: 6px; font-size: 0.92rem; }
+    .start-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 18px; line-height: 1.6; text-align: left; }
+    .start-desc li { margin-left: 18px; }
+
+    /* ── CASE TOP (banner + monitor) ─────────────── */
+    .case-top { position: sticky; top: 57px; z-index: 10; background: var(--bg); padding: 8px 0; }
+    .pt-banner { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 0.85rem; padding: 0 2px 6px; }
+    .pt-banner .who { font-weight: 700; display: block; line-height: 1.3; }
+    .pt-banner .clock { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-weight: 700; white-space: nowrap; }
+    .pt-banner .loc { color: var(--text-dim); font-size: 0.76rem; display: block; line-height: 1.3; }
+    .monitor {
+      background: var(--mon-bg); border-radius: 12px; padding: 7px 6px 5px;
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: #cfd8dc;
+      border: 1px solid var(--border);
+    }
+    .monitor.alarm { animation: alarm 0.8s steps(2) infinite; }
+    @keyframes alarm { 50% { background: #5a1010; } }
+    .vital { text-align: center; }
+    .vital .lbl { font-size: 0.58rem; letter-spacing: 0.08em; opacity: 0.7; }
+    .vital .val { font-size: 1.12rem; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+    .vital.hr .val { color: #46e07f; }
+    .vital.bp .val { color: #ff7a7a; font-size: 1rem; }
+    .vital.rr .val { color: #ffd34f; }
+    .vital.sp .val { color: #4fd0ff; }
+    .vital.tmp .val { color: #e6edf0; }
+    .rhythm { grid-column: 1 / -1; text-align: center; font-size: 0.66rem; color: #46e07f; opacity: 0.85; letter-spacing: 0.06em; }
+    .monitor.alarm .rhythm { color: #ff8080; opacity: 1; font-weight: 700; }
+
+    /* ── FEED ────────────────────────────────────── */
+    #feed { padding-bottom: 8px; }
+    .f-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 8px 0; font-size: 0.9rem; }
+    .f-card .f-hd { display: flex; justify-content: space-between; gap: 8px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px; }
+    .f-card p + p { margin-top: 6px; }
+    .f-card.event { border-color: var(--warn); background: var(--warn-soft); }
+    .f-card.event.bad { border-color: var(--bad); background: var(--bad-soft); }
+    .f-card.event.info { border-color: var(--accent); background: var(--accent-soft); }
+    .f-card.result { border-left: 4px solid var(--accent); }
+    .r-hd { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; margin-bottom: 6px; }
+    .r-hd b { font-size: 0.88rem; }
+    .r-hd .tm { color: var(--text-dim); }
+    .f-line { font-size: 0.82rem; color: var(--text-dim); padding: 3px 2px; display: flex; gap: 8px; }
+    .f-line .tm, .f-card .tm { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.75rem; flex-shrink: 0; }
+    .f-line b { color: var(--text); font-weight: 600; }
+    .f-line.stop b { text-decoration: line-through; }
+    .f-adv { text-align: center; font-size: 0.75rem; color: var(--text-dim); margin: 12px 0; display: flex; align-items: center; gap: 10px; }
+    .f-adv::before, .f-adv::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .labs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 3px 14px; font-size: 0.86rem; }
+    .labs div { display: flex; justify-content: space-between; gap: 8px; }
+    .labs .k { color: var(--text-dim); }
+    .labs .v { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+    .labs .v.H { color: var(--bad); }
+    .labs .v.L { color: #2f7fd6; }
+    .labs .v.H::after { content: ' H'; font-size: 0.7em; }
+    .labs .v.L::after { content: ' L'; font-size: 0.7em; }
+    .exam-row { margin-top: 2px; }
+    .exam-row b { display: inline-block; min-width: 82px; font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+
+    /* ── DOCK ────────────────────────────────────── */
+    body[data-state="playing"] main { padding-bottom: 150px; }
+    #dock {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+      background: var(--bg); border-top: 1px solid var(--border);
+      padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+    }
+    .dock-inner { max-width: 720px; margin: 0 auto; padding: 0 16px; }
+    .ta-wrap { position: relative; }
+    #order-input {
+      width: 100%; font: inherit; font-size: 1rem; padding: 11px 14px; border-radius: 10px;
+      border: 1.5px solid var(--border); background: var(--surface); color: var(--text); outline: none;
+    }
+    #order-input:focus { border-color: var(--accent); }
+    #ta-list {
+      position: absolute; left: 0; right: 0; bottom: calc(100% + 6px);
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.18); overflow: hidden; display: none; max-height: 50vh; overflow-y: auto;
+    }
+    #ta-list.open { display: block; }
+    .ta-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; font-size: 0.9rem; border-bottom: 1px solid var(--border); }
+    .ta-item:last-child { border-bottom: none; }
+    .ta-item.hl, .ta-item:hover { background: var(--accent-soft); }
+    .ta-item .ic { width: 20px; text-align: center; }
+    .ta-item .nm { flex: 1; }
+    .ta-item .kd { font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+    .ta-empty { padding: 10px 12px; font-size: 0.85rem; color: var(--text-dim); }
+    .dock-btns { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 8px; }
+    .dock-btn {
+      font: inherit; background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      border-radius: 10px; padding: 6px 2px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 1px;
+      position: relative;
+    }
+    .dock-btn .i { font-size: 1.05rem; line-height: 1.2; }
+    .dock-btn .l { font-size: 0.64rem; color: var(--text-dim); font-weight: 600; }
+    .dock-btn.primary { background: var(--accent); border-color: var(--accent); }
+    .dock-btn.primary .l { color: #fff; }
+    .dock-btn .badge {
+      position: absolute; top: -5px; right: -3px; background: var(--warn); color: #fff;
+      font-size: 0.62rem; font-weight: 700; border-radius: 9px; padding: 0 5px; min-width: 16px;
+    }
+
+    /* ── SHEETS / MODALS ─────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; z-index: 50; background: rgba(5,10,15,0.55);
+      display: flex; align-items: flex-end; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.18s;
+    }
+    @media (min-width: 640px) { .overlay { align-items: center; } }
+    .overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px 16px 0 0;
+      width: 100%; max-width: 520px; max-height: 86vh; overflow-y: auto; padding: 18px 18px max(18px, env(safe-area-inset-bottom));
+    }
+    @media (min-width: 640px) { .modal { border-radius: 16px; } }
+    .modal-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; }
+    .modal-title { font-size: 1.08rem; font-weight: 700; }
+    .modal-close { background: none; border: none; color: var(--text-dim); font-size: 1.3rem; cursor: pointer; }
+    .modal-section { margin-bottom: 16px; }
+    .modal-section h3 { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
+    .modal-section p, .modal-section li { font-size: 0.88rem; line-height: 1.6; }
+    .modal-section ul { padding-left: 18px; }
+    .modal-section p + p { margin-top: 8px; }
+    .disclaimer { font-size: 0.76rem; color: var(--text-dim); }
+    .choice-list { display: flex; flex-direction: column; gap: 8px; }
+    .choice {
+      font: inherit; text-align: left; cursor: pointer; background: var(--surface2); color: var(--text);
+      border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 14px; font-size: 0.92rem;
+      display: flex; justify-content: space-between; gap: 10px; align-items: center;
+    }
+    .choice:hover { border-color: var(--accent); }
+    .choice.cur { border-color: var(--accent); background: var(--accent-soft); }
+    .choice small { color: var(--text-dim); font-size: 0.78rem; }
+    .chk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .chk {
+      display: flex; align-items: center; gap: 8px; font-size: 0.9rem; padding: 9px 10px; cursor: pointer;
+      border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface2); user-select: none;
+    }
+    .chk input { accent-color: var(--accent); width: 16px; height: 16px; }
+    .act-row { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
+    .act-row .nm { flex: 1; }
+    .act-row .nm small { display: block; color: var(--text-dim); font-size: 0.76rem; }
+    .mini-btn { font: inherit; font-size: 0.76rem; font-weight: 600; padding: 5px 10px; border-radius: 7px; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text); }
+    .mini-btn.stop { color: var(--bad); border-color: var(--bad); }
+    .sheet-note { font-size: 0.82rem; color: var(--text-dim); margin-bottom: 12px; }
+    #dx-input { width: 100%; font: inherit; font-size: 1rem; padding: 11px 14px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); outline: none; }
+    #dx-input:focus { border-color: var(--accent); }
+    #dx-list { margin-top: 8px; max-height: 38vh; overflow-y: auto; }
+    .hist-item { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
+    .hist-item .hi-num { color: var(--text-dim); min-width: 40px; }
+    .hist-item .hi-grid { flex: 1; letter-spacing: 1px; font-size: 0.8rem; }
+    .hist-item .hi-score { font-weight: 700; }
+
+    /* ── RESULT ──────────────────────────────────── */
+    .res-card { text-align: center; }
+    .res-score { font-size: 3.4rem; font-weight: 800; line-height: 1.05; }
+    .res-score small { font-size: 1.1rem; color: var(--text-dim); font-weight: 600; }
+    .res-grade { font-size: 1rem; font-weight: 700; margin-top: 2px; }
+    .res-dead { margin: 10px 0 0; padding: 8px 12px; background: var(--bad-soft); color: var(--bad); border-radius: 10px; font-weight: 700; font-size: 0.9rem; }
+    .res-dx { margin-top: 10px; font-size: 0.9rem; color: var(--text-dim); }
+    .res-dx b { color: var(--text); }
+    .res-grid { font-size: 1.25rem; letter-spacing: 1px; margin: 12px 0 4px; word-break: break-all; }
+    .res-meta { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 14px; }
+    .section-title { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); margin: 18px 0 8px; text-align: left; }
+    .crit { display: flex; gap: 10px; text-align: left; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 0.87rem; }
+    .crit .ic { width: 20px; flex-shrink: 0; text-align: center; }
+    .crit .bd { flex: 1; }
+    .crit .bd small { display: block; color: var(--text-dim); font-size: 0.78rem; }
+    .crit .pt { font-variant-numeric: tabular-nums; color: var(--text-dim); font-size: 0.8rem; white-space: nowrap; }
+    .crit.harm .pt { color: var(--bad); font-weight: 700; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; text-align: left; }
+    .chip { font-size: 0.78rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; }
+    .pearls { text-align: left; padding-left: 18px; font-size: 0.88rem; }
+    .pearls li + li { margin-top: 6px; }
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+    .stat-num { font-size: 1.35rem; font-weight: 800; }
+    .stat-lbl { font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+    .community-chart { display: flex; flex-direction: column; gap: 5px; }
+    .community-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+    .community-lbl { min-width: 56px; color: var(--text-dim); text-align: left; }
+    .community-bar-bg { flex: 1; background: var(--surface2); border-radius: 4px; height: 16px; overflow: hidden; }
+    .community-bar { height: 100%; border-radius: 4px; background: #8593a2; }
+    .community-bar.player { background: var(--accent); }
+    .community-pct { min-width: 64px; text-align: right; color: var(--text-dim); font-size: 0.75rem; }
+    .community-note { font-size: 0.78rem; color: var(--text-dim); margin-top: 8px; }
+    .next-in { font-size: 0.85rem; color: var(--text-dim); margin-top: 14px; }
+    .review-title { margin: 22px 0 6px; text-align: center; }
+
+    #toast {
+      position: fixed; left: 50%; bottom: calc(150px + env(safe-area-inset-bottom)); z-index: 60; transform: translateX(-50%) translateY(260px);
+      background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 10px;
+      font-size: 0.88rem; font-weight: 600; transition: transform 0.25s; max-width: 90vw; text-align: center;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body data-state="loading">
+
+<header>
+  <div class="hdr-inner">
+    <div class="logo">
+      <div class="logo-icon">📋</div>
+      <div>
+        <div class="logo-name">Orders</div>
+        <div class="puzzle-num" id="puzzle-num"></div>
+      </div>
+    </div>
+    <div class="header-btns">
+      <button class="icon-btn" id="btn-help" title="How to play">?</button>
+      <button class="icon-btn" id="btn-stats" title="Stats">📊</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- START -->
+  <section id="panel-start" class="panel">
+    <div class="card start-card">
+      <div class="start-title">Orders</div>
+      <div class="start-sub" id="start-sub">Daily case</div>
+      <div class="pt-preview">
+        <div class="eyebrow">Today's patient</div>
+        <div class="who" id="pv-who"></div>
+        <div class="where" id="pv-where"></div>
+        <div class="cc" id="pv-cc"></div>
+      </div>
+      <div class="start-desc">
+        <ul>
+          <li><b>Type orders</b>: labs, imaging, meds, fluids, procedures, consults, counseling.</li>
+          <li><b>Advance the clock</b> to get results. The patient gets better or worse depending on what you do.</li>
+          <li><b>Move</b> the patient (ED, ward, ICU, home), then <b>end the case</b> with your diagnosis.</li>
+        </ul>
+      </div>
+      <button class="btn btn-primary btn-block" id="btn-start">Start case</button>
+      <div style="margin-top:10px"><button class="link-btn" id="btn-practice-start">Practice other cases</button></div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="panel-result" class="panel">
+    <div class="card res-card">
+      <div class="eyebrow" id="res-label">Today's case</div>
+      <div class="res-score"><span id="res-score">0</span><small>/100</small></div>
+      <div class="res-grade" id="res-grade"></div>
+      <div class="res-dead" id="res-dead" style="display:none">💀 The patient died.</div>
+      <div class="res-dx" id="res-dx"></div>
+      <div class="res-grid" id="res-grid"></div>
+      <div class="res-meta" id="res-meta"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-share">Share</button>
+        <button class="btn btn-secondary" id="btn-copy">Copy</button>
+      </div>
+
+      <div class="section-title">Key actions</div>
+      <div id="res-crit"></div>
+      <div id="res-harms-wrap">
+        <div class="section-title">Harmful</div>
+        <div id="res-harms"></div>
+      </div>
+      <div id="res-extras-wrap">
+        <div class="section-title">Unnecessary orders</div>
+        <div class="chips" id="res-extras"></div>
+      </div>
+      <div class="section-title">Teaching points</div>
+      <ul class="pearls" id="res-pearls"></ul>
+
+      <div id="stats-block">
+        <div class="section-title">Your stats</div>
+        <div class="stats-row">
+          <div><div class="stat-num" id="st-played">0</div><div class="stat-lbl">Played</div></div>
+          <div><div class="stat-num" id="st-avg">0</div><div class="stat-lbl">Average</div></div>
+          <div><div class="stat-num" id="st-best">0</div><div class="stat-lbl">Best</div></div>
+          <div><div class="stat-num" id="st-days">0</div><div class="stat-lbl">Day streak</div></div>
+        </div>
+      </div>
+      <div id="community" style="display:none">
+        <div class="section-title">Everyone today</div>
+        <div class="community-chart" id="community-chart"></div>
+        <div class="community-note" id="community-note"></div>
+      </div>
+      <div class="next-in" id="next-in"></div>
+      <div style="margin-top:12px" class="btn-row">
+        <button class="btn btn-secondary" id="btn-practice-res">Practice other cases</button>
+        <button class="btn btn-secondary" id="btn-back-daily" style="display:none">Back to today</button>
+      </div>
+    </div>
+    <div class="eyebrow review-title">Case log</div>
+  </section>
+
+  <!-- CASE -->
+  <section id="panel-case" class="panel">
+    <div class="case-top">
+      <div class="pt-banner">
+        <div><span class="who" id="bn-who"></span><span class="loc" id="bn-loc"></span></div>
+        <div class="clock" id="bn-clock"></div>
+      </div>
+      <div class="monitor" id="monitor"></div>
+    </div>
+    <div id="feed"></div>
+  </section>
+</main>
+
+<div id="dock">
+  <div class="dock-inner">
+    <div class="ta-wrap">
+      <input id="order-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             placeholder="Type an order (CBC, saline, ceftriaxone…)">
+      <div id="ta-list"></div>
+    </div>
+    <div class="dock-btns">
+      <button class="dock-btn" id="btn-exam"><span class="i">🩺</span><span class="l">Exam</span></button>
+      <button class="dock-btn" id="btn-hx"><span class="i">💬</span><span class="l">Talk</span></button>
+      <button class="dock-btn primary" id="btn-clock"><span class="i">⏩</span><span class="l">Clock</span><span class="badge" id="pending-badge" style="display:none"></span></button>
+      <button class="dock-btn" id="btn-active"><span class="i">📋</span><span class="l">Orders</span></button>
+      <button class="dock-btn" id="btn-move"><span class="i">🏥</span><span class="l">Move</span></button>
+      <button class="dock-btn" id="btn-end"><span class="i">🏁</span><span class="l">End</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- DOSE -->
+<div class="overlay" id="sheet-dose">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title" id="dose-title"></div><button class="modal-close" data-close>✕</button></div>
+    <div class="sheet-note" id="dose-note"></div>
+    <div class="choice-list" id="dose-list"></div>
+  </div>
+</div>
+
+<!-- CLOCK -->
+<div class="overlay" id="sheet-clock">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Advance the clock</div><button class="modal-close" data-close>✕</button></div>
+    <div class="sheet-note">The clock stops early if something happens with the patient.</div>
+    <div class="choice-list" id="clock-list"></div>
+  </div>
+</div>
+
+<!-- EXAM -->
+<div class="overlay" id="sheet-exam">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Physical exam</div><button class="modal-close" data-close>✕</button></div>
+    <div class="sheet-note">Each system takes about 2 minutes.</div>
+    <div class="chk-grid" id="exam-list"></div>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn btn-secondary" id="btn-exam-all">Select all</button>
+      <button class="btn btn-primary" id="btn-exam-go">Examine</button>
+    </div>
+  </div>
+</div>
+
+<!-- ACTIVE ORDERS -->
+<div class="overlay" id="sheet-active">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Orders</div><button class="modal-close" data-close>✕</button></div>
+    <div id="active-list"></div>
+  </div>
+</div>
+
+<!-- MOVE -->
+<div class="overlay" id="sheet-move">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Change location</div><button class="modal-close" data-close>✕</button></div>
+    <div class="choice-list" id="move-list"></div>
+  </div>
+</div>
+
+<!-- END -->
+<div class="overlay" id="sheet-end">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title" id="end-title">End the case</div><button class="modal-close" id="end-close" data-close>✕</button></div>
+    <div class="sheet-note" id="end-note">Ending the case stops the simulation. Make sure your final orders are in.</div>
+    <input id="dx-input" type="text" autocomplete="off" placeholder="Final diagnosis…">
+    <div id="dx-list" class="choice-list"></div>
+  </div>
+</div>
+
+<!-- HELP -->
+<div class="overlay" id="modal-help">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">How to play</div><button class="modal-close" data-close>✕</button></div>
+    <div class="modal-section">
+      <p>It's a Step 3 CCS-style case. Nobody tells you what to do. You get a patient and a clock, and you write orders.</p>
+    </div>
+    <div class="modal-section">
+      <h3>Controls</h3>
+      <ul>
+        <li><b>Type an order</b> and pick it from the list. Orders take effect immediately; results take time (a fingerstick takes minutes, a culture takes a day).</li>
+        <li><b>⏩ Clock</b> moves time forward. "Next result" skips to when the next result is ready. The clock stops early if the nurse calls or the patient changes.</li>
+        <li><b>🩺 Exam</b> and <b>💬 Talk</b> (interval history) cost a few minutes each.</li>
+        <li><b>📋 Orders</b> shows what's running and what's pending. Stop or change infusions there.</li>
+        <li><b>🏥 Move</b> the patient between ED, ward, and ICU, or discharge home.</li>
+        <li><b>🏁 End</b> the case when you're done, and name the diagnosis.</li>
+      </ul>
+    </div>
+    <div class="modal-section">
+      <h3>Scoring</h3>
+      <p>As in CCS, you're graded on <b>key actions and their timing</b>, plus points off for <b>harmful</b> orders and a small deduction for <b>unnecessary</b> ones. Don't forget monitoring, location, and the boring stuff: prophylaxis, counseling, follow-up.</p>
+      <p>Share squares: 🟩 key action done on time · 🟨 partial or late · ⬜ missed.</p>
+    </div>
+    <div class="modal-section">
+      <p class="disclaimer">Educational game for medical trainees. Not medical advice. The physiology is a simplified model; doses and thresholds follow common US guidelines.</p>
+    </div>
+    <button class="btn btn-primary btn-block" data-close>Got it</button>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="overlay" id="modal-stats">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">History</div><button class="modal-close" data-close>✕</button></div>
+    <div id="hist-list"></div>
+  </div>
+</div>
+
+<!-- PRACTICE -->
+<div class="overlay" id="modal-practice">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Practice cases</div><button class="modal-close" data-close>✕</button></div>
+    <p class="sheet-note">Practice runs aren't saved or shared.</p>
+    <div class="choice-list" id="practice-list"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ═══════════════════════════════════════════════════════════════
+  // CONFIG
+  // ═══════════════════════════════════════════════════════════════
+
+  const SUPABASE_URL = 'https://qnlzjddurxpfszhitreb.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_s0MLm4hC1PUsCwAK4HszUg_lLCQWmau';
+  const STATS_DAY_OFFSET = 400000; // shares the Directional `scores` table (US +100000, Map Tap +200000, Rounds +300000)
+
+  const QS         = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
+  const TEST_MODE  = QS.has('test');
+  const LAUNCH_UTC = Date.UTC(2026, 9, 17); // Oct 17, 2026 = case #1
+  const SHARE_URL  = 'directional.global/orders';
+
+  // ═══════════════════════════════════════════════════════════════
+  // ORDER CATALOG
+  //
+  // kind:  lab · img · fluid · med · proc · nurse · consult · counsel
+  // tat:   minutes until a result comes back (tests and some procedures)
+  // cont:  stays active until stopped (infusions, scheduled meds, nursing orders)
+  // run:   one-time order that runs for N minutes (e.g. a KCl rider)
+  // fluid: 'bolus' (dose = mL, or '30kg' for 30 mL/kg) or 'rate' (dose = mL/h); cl = chloride load vs NS; dex = contains dextrose
+  // doses: [value, label]; the chosen value is stored on the order
+  // every: emits a result every N minutes while active
+  // ═══════════════════════════════════════════════════════════════
+
+  const KIND = {
+    lab:     { ic: '🧪', label: 'Lab' },
+    img:     { ic: '🩻', label: 'Diagnostic' },
+    fluid:   { ic: '💧', label: 'IV fluid' },
+    med:     { ic: '💊', label: 'Medication' },
+    proc:    { ic: '🔧', label: 'Procedure' },
+    nurse:   { ic: '🛏️', label: 'Nursing' },
+    consult: { ic: '📞', label: 'Consult' },
+    counsel: { ic: '💬', label: 'Counseling' },
+  };
+
+  const BOLUS_DOSES = [[500, '500 mL'], [1000, '1 L'], [2000, '2 L'], ['30kg', '30 mL/kg']];
+  const RATE_DOSES  = [[75, '75 mL/h'], [100, '100 mL/h'], [150, '150 mL/h'], [250, '250 mL/h'], [500, '500 mL/h']];
+
+  const CATALOG = [
+    // ── Labs ──
+    { id: 'cbc', kind: 'lab', name: 'CBC with differential', syn: 'complete blood count hemoglobin hgb hct wbc platelets plt', tat: 30 },
+    { id: 'bmp', kind: 'lab', name: 'Basic metabolic panel (BMP)', syn: 'chem7 chem 7 electrolytes lytes sodium potassium k bicarbonate creatinine bun glucose', tat: 30 },
+    { id: 'cmp', kind: 'lab', name: 'Comprehensive metabolic panel (CMP)', syn: 'chem14 lfts liver function tests electrolytes albumin bilirubin', tat: 45 },
+    { id: 'mg', kind: 'lab', name: 'Magnesium, serum', syn: 'mg mag', tat: 30 },
+    { id: 'phos', kind: 'lab', name: 'Phosphate, serum', syn: 'phosphorus phos', tat: 30 },
+    { id: 'lactate', kind: 'lab', name: 'Lactate', syn: 'lactic acid', tat: 20 },
+    { id: 'vbg', kind: 'lab', name: 'Venous blood gas (VBG)', syn: 'blood gas ph venous', tat: 15 },
+    { id: 'abg', kind: 'lab', name: 'Arterial blood gas (ABG)', syn: 'blood gas ph po2 pco2 arterial', tat: 15 },
+    { id: 'bhb', kind: 'lab', name: 'β-hydroxybutyrate, serum', syn: 'beta hydroxybutyrate bhb ketones serum ketones', tat: 45 },
+    { id: 'osm', kind: 'lab', name: 'Serum osmolality', syn: 'osmolality osm', tat: 45 },
+    { id: 'fsg', kind: 'lab', name: 'Fingerstick glucose', syn: 'accucheck poc glucose blood sugar bg fsbg point of care', tat: 2 },
+    { id: 'trop', kind: 'lab', name: 'Troponin I, high-sensitivity', syn: 'troponin trop cardiac enzymes hs', tat: 45 },
+    { id: 'bnp', kind: 'lab', name: 'BNP', syn: 'brain natriuretic peptide', tat: 45 },
+    { id: 'ck', kind: 'lab', name: 'Creatine kinase (CK)', syn: 'cpk ck', tat: 45 },
+    { id: 'lipase', kind: 'lab', name: 'Lipase', syn: 'pancreas', tat: 45 },
+    { id: 'coags', kind: 'lab', name: 'PT/INR and aPTT', syn: 'coagulation coags pt inr ptt', tat: 30 },
+    { id: 'type_screen', kind: 'lab', name: 'Type and screen', syn: 'type and cross crossmatch blood bank', tat: 45 },
+    { id: 'lipid', kind: 'lab', name: 'Lipid panel', syn: 'cholesterol ldl hdl triglycerides', tat: 60 },
+    { id: 'a1c', kind: 'lab', name: 'Hemoglobin A1c', syn: 'hba1c a1c', tat: 60 },
+    { id: 'tsh', kind: 'lab', name: 'TSH', syn: 'thyroid', tat: 60 },
+    { id: 'cortisol', kind: 'lab', name: 'Cortisol, serum', syn: 'adrenal', tat: 60 },
+    { id: 'ammonia', kind: 'lab', name: 'Ammonia', syn: 'nh3', tat: 30 },
+    { id: 'ua', kind: 'lab', name: 'Urinalysis', syn: 'ua urine dipstick', tat: 30 },
+    { id: 'ucx', kind: 'lab', name: 'Urine culture', syn: 'urine cx', tat: 2880 },
+    { id: 'bcx', kind: 'lab', name: 'Blood cultures ×2', syn: 'blood culture bcx', tat: 1440 },
+    { id: 'sputum', kind: 'lab', name: 'Sputum Gram stain and culture', syn: 'sputum culture gram stain', tat: 120 },
+    { id: 'strep_ag', kind: 'lab', name: 'Urinary pneumococcal antigen', syn: 'streptococcus pneumoniae antigen urine strep', tat: 120 },
+    { id: 'legion_ag', kind: 'lab', name: 'Urinary Legionella antigen', syn: 'legionella antigen urine', tat: 120 },
+    { id: 'rvp', kind: 'lab', name: 'Respiratory viral PCR (influenza, COVID-19, RSV)', syn: 'flu covid rsv viral panel swab nasopharyngeal', tat: 90 },
+    { id: 'procal', kind: 'lab', name: 'Procalcitonin', syn: 'pct', tat: 60 },
+    { id: 'ddimer', kind: 'lab', name: 'D-dimer', syn: 'ddimer dimer', tat: 45 },
+    { id: 'hcg', kind: 'lab', name: 'hCG, urine', syn: 'pregnancy test beta hcg', tat: 15 },
+    { id: 'tox', kind: 'lab', name: 'Urine drug screen', syn: 'tox screen uds drugs', tat: 60 },
+    { id: 'etoh', kind: 'lab', name: 'Ethanol level', syn: 'alcohol etoh', tat: 30 },
+    { id: 'apap_lvl', kind: 'lab', name: 'Acetaminophen and salicylate levels', syn: 'tylenol aspirin level tox', tat: 60 },
+
+    // ── Diagnostics / imaging ──
+    { id: 'ecg', kind: 'img', name: 'ECG, 12-lead', syn: 'ekg electrocardiogram', tat: 5 },
+    { id: 'ecg_right', kind: 'img', name: 'ECG, right-sided leads (V4R)', syn: 'right sided ekg electrocardiogram v4r', tat: 5 },
+    { id: 'cxr', kind: 'img', name: 'Chest x-ray, portable', syn: 'cxr xray x-ray chest radiograph film', tat: 40 },
+    { id: 'ct_head', kind: 'img', name: 'CT head without contrast', syn: 'cat scan brain', tat: 60 },
+    { id: 'ctpa', kind: 'img', name: 'CT pulmonary angiogram', syn: 'cta chest pe protocol pulmonary embolism', tat: 75 },
+    { id: 'cta_aorta', kind: 'img', name: 'CT angiogram, chest (aorta)', syn: 'cta dissection aorta', tat: 75 },
+    { id: 'ct_chest', kind: 'img', name: 'CT chest without contrast', syn: 'cat scan lungs', tat: 60 },
+    { id: 'ct_abd', kind: 'img', name: 'CT abdomen/pelvis with contrast', syn: 'cat scan abd belly', tat: 90 },
+    { id: 'us_ruq', kind: 'img', name: 'Ultrasound, abdomen (RUQ)', syn: 'ruq us gallbladder liver', tat: 90 },
+    { id: 'echo', kind: 'img', name: 'Echocardiogram, transthoracic', syn: 'tte echo cardiac ultrasound', tat: 180 },
+    { id: 'stress', kind: 'img', name: 'Exercise treadmill stress test', syn: 'stress test treadmill', tat: 120 },
+
+    // ── IV fluids & electrolytes ──
+    { id: 'ns_bolus', kind: 'fluid', name: '0.9% saline (NS) IV bolus', syn: 'normal saline ns nss fluids bolus crystalloid', fluid: 'bolus', cl: 1, doses: BOLUS_DOSES },
+    { id: 'lr_bolus', kind: 'fluid', name: 'Lactated Ringer\'s IV bolus', syn: 'lr ringers ringer fluids bolus crystalloid', fluid: 'bolus', cl: 0.3, doses: BOLUS_DOSES },
+    { id: 'ns_inf', kind: 'fluid', name: '0.9% saline (NS) IV infusion', syn: 'normal saline ns maintenance fluids mivf drip', fluid: 'rate', cl: 1, cont: true, doses: RATE_DOSES },
+    { id: 'lr_inf', kind: 'fluid', name: 'Lactated Ringer\'s IV infusion', syn: 'lr ringers maintenance fluids mivf', fluid: 'rate', cl: 0.3, cont: true, doses: RATE_DOSES },
+    { id: 'half_ns', kind: 'fluid', name: '0.45% saline IV infusion', syn: 'half normal saline 1/2ns hypotonic fluids', fluid: 'rate', cl: 0.5, cont: true, doses: RATE_DOSES },
+    { id: 'd5_half', kind: 'fluid', name: 'D5 + 0.45% saline IV infusion', syn: 'd5 1/2 ns d5half dextrose fluids', fluid: 'rate', cl: 0.5, dex: true, cont: true, doses: RATE_DOSES },
+    { id: 'd5w', kind: 'fluid', name: 'Dextrose 5% in water (D5W) IV infusion', syn: 'd5w dextrose fluids', fluid: 'rate', cl: 0, dex: true, cont: true, doses: RATE_DOSES },
+    { id: 'kcl_fluids', kind: 'med', name: 'Potassium chloride, added to IV fluids', syn: 'kcl potassium replacement repletion in fluids', cont: true, doses: [[20, '20 mEq/L'], [40, '40 mEq/L']] },
+    { id: 'kcl_iv', kind: 'med', name: 'Potassium chloride 10 mEq/h IV × 4 h', syn: 'kcl potassium replacement repletion iv rider', run: 240 },
+    { id: 'kcl_po', kind: 'med', name: 'Potassium chloride 40 mEq PO', syn: 'kcl potassium oral replacement' },
+    { id: 'kphos', kind: 'med', name: 'Potassium phosphate IV', syn: 'phosphate phos replacement' },
+    { id: 'mg_iv', kind: 'med', name: 'Magnesium sulfate 2 g IV', syn: 'mag mg replacement' },
+    { id: 'ca_gluc', kind: 'med', name: 'Calcium gluconate 1 g IV', syn: 'calcium' },
+    { id: 'bicarb', kind: 'med', name: 'Sodium bicarbonate IV', syn: 'bicarb nahco3 bicarbonate' },
+    { id: 'd50', kind: 'med', name: 'Dextrose 50% IV push (25 g)', syn: 'd50 amp dextrose hypoglycemia' },
+    { id: 'albumin', kind: 'fluid', name: 'Albumin 25% IV', syn: 'colloid' },
+    { id: 'prbc', kind: 'fluid', name: 'Packed red blood cells, 1 unit', syn: 'transfuse transfusion blood prbc' },
+
+    // ── Insulin / diabetes ──
+    { id: 'insulin_drip', kind: 'med', name: 'Regular insulin IV infusion', syn: 'insulin drip gtt regular infusion', cont: true,
+      doses: [[0.02, '0.02 units/kg/h'], [0.05, '0.05 units/kg/h'], [0.1, '0.1 units/kg/h'], [0.14, '0.14 units/kg/h'], [0.5, '0.5 units/kg/h'], [1, '1 unit/kg/h']], perKg: 'units/h' },
+    { id: 'insulin_bolus', kind: 'med', name: 'Regular insulin IV bolus (0.1 units/kg)', syn: 'insulin push bolus regular' },
+    { id: 'glargine', kind: 'med', name: 'Insulin glargine SC daily (basal)', syn: 'lantus basal long acting insulin subcutaneous', cont: true },
+    { id: 'lispro', kind: 'med', name: 'Insulin lispro SC with meals + correction scale', syn: 'humalog prandial mealtime bolus sliding scale insulin subcutaneous', cont: true },
+    { id: 'metformin', kind: 'med', name: 'Metformin PO', syn: 'glucophage', cont: true },
+
+    // ── Antimicrobials ──
+    { id: 'ceftriaxone', kind: 'med', name: 'Ceftriaxone IV', syn: 'rocephin cephalosporin antibiotic abx', cont: true },
+    { id: 'azithro', kind: 'med', name: 'Azithromycin IV', syn: 'zithromax macrolide antibiotic abx', cont: true },
+    { id: 'levo', kind: 'med', name: 'Levofloxacin IV', syn: 'levaquin fluoroquinolone antibiotic abx', cont: true },
+    { id: 'doxy', kind: 'med', name: 'Doxycycline PO', syn: 'tetracycline antibiotic abx', cont: true },
+    { id: 'piptazo', kind: 'med', name: 'Piperacillin–tazobactam IV', syn: 'zosyn pip tazo antibiotic abx', cont: true },
+    { id: 'cefepime', kind: 'med', name: 'Cefepime IV', syn: 'cephalosporin antibiotic abx', cont: true },
+    { id: 'vanc', kind: 'med', name: 'Vancomycin IV', syn: 'vanco mrsa antibiotic abx', cont: true },
+    { id: 'meropenem', kind: 'med', name: 'Meropenem IV', syn: 'carbapenem antibiotic abx', cont: true },
+    { id: 'amp_sulb', kind: 'med', name: 'Ampicillin–sulbactam IV', syn: 'unasyn antibiotic abx', cont: true },
+    { id: 'metronidazole', kind: 'med', name: 'Metronidazole IV', syn: 'flagyl antibiotic abx', cont: true },
+    { id: 'oseltamivir', kind: 'med', name: 'Oseltamivir PO', syn: 'tamiflu antiviral influenza', cont: true },
+
+    // ── Vasoactives / steroids ──
+    { id: 'norepi', kind: 'med', name: 'Norepinephrine IV infusion', syn: 'levophed pressor vasopressor', cont: true,
+      doses: [[0.05, '0.05 mcg/kg/min'], [0.1, '0.1 mcg/kg/min'], [0.2, '0.2 mcg/kg/min'], [0.3, '0.3 mcg/kg/min'], [0.5, '0.5 mcg/kg/min']] },
+    { id: 'vaso', kind: 'med', name: 'Vasopressin IV infusion (0.03 units/min)', syn: 'pressor vasopressor', cont: true },
+    { id: 'epi_inf', kind: 'med', name: 'Epinephrine IV infusion', syn: 'adrenaline pressor vasopressor', cont: true,
+      doses: [[0.05, '0.05 mcg/kg/min'], [0.1, '0.1 mcg/kg/min'], [0.2, '0.2 mcg/kg/min']] },
+    { id: 'dopa', kind: 'med', name: 'Dopamine IV infusion', syn: 'pressor vasopressor', cont: true,
+      doses: [[5, '5 mcg/kg/min'], [10, '10 mcg/kg/min'], [15, '15 mcg/kg/min']] },
+    { id: 'phenyl', kind: 'med', name: 'Phenylephrine IV infusion', syn: 'neosynephrine neo pressor vasopressor', cont: true,
+      doses: [[0.5, '0.5 mcg/kg/min'], [1, '1 mcg/kg/min'], [2, '2 mcg/kg/min']] },
+    { id: 'dobut', kind: 'med', name: 'Dobutamine IV infusion', syn: 'inotrope', cont: true, doses: [[2.5, '2.5 mcg/kg/min'], [5, '5 mcg/kg/min']] },
+    { id: 'hydrocort', kind: 'med', name: 'Hydrocortisone 50 mg IV q6h', syn: 'stress dose steroids solu-cortef corticosteroid', cont: true },
+
+    // ── Analgesia / symptomatic ──
+    { id: 'apap', kind: 'med', name: 'Acetaminophen 650 mg PO', syn: 'tylenol paracetamol fever antipyretic' },
+    { id: 'ibuprofen', kind: 'med', name: 'Ibuprofen 600 mg PO', syn: 'nsaid motrin advil' },
+    { id: 'ketorolac', kind: 'med', name: 'Ketorolac 15 mg IV', syn: 'toradol nsaid' },
+    { id: 'morphine', kind: 'med', name: 'Morphine 4 mg IV', syn: 'opioid pain analgesia' },
+    { id: 'fentanyl', kind: 'med', name: 'Fentanyl 50 mcg IV', syn: 'opioid pain analgesia' },
+    { id: 'ondansetron', kind: 'med', name: 'Ondansetron 4 mg IV', syn: 'zofran nausea antiemetic' },
+    { id: 'pantoprazole', kind: 'med', name: 'Pantoprazole 40 mg IV', syn: 'ppi protonix' },
+
+    // ── Cardiac / anticoagulation ──
+    { id: 'asa_load', kind: 'med', pri: -1, name: 'Aspirin 325 mg PO, chewed', syn: 'asa aspirin load' },
+    { id: 'asa', kind: 'med', name: 'Aspirin 81 mg PO daily', syn: 'asa baby aspirin', cont: true },
+    { id: 'nitro_sl', kind: 'med', name: 'Nitroglycerin 0.4 mg SL', syn: 'ntg nitro sublingual nitrate' },
+    { id: 'nitro_drip', kind: 'med', name: 'Nitroglycerin IV infusion', syn: 'ntg nitro drip nitrate', cont: true },
+    { id: 'heparin_drip', kind: 'med', name: 'Heparin IV (weight-based bolus + infusion)', syn: 'ufh unfractionated heparin drip anticoagulation', cont: true },
+    { id: 'enox_tx', kind: 'med', name: 'Enoxaparin 1 mg/kg SC q12h (treatment)', syn: 'lovenox lmwh anticoagulation', cont: true },
+    { id: 'enox_ppx', kind: 'med', name: 'Enoxaparin 40 mg SC daily (DVT prophylaxis)', syn: 'lovenox lmwh dvt vte prophylaxis', cont: true },
+    { id: 'hep_sc', kind: 'med', name: 'Heparin 5,000 units SC q8h (DVT prophylaxis)', syn: 'subcutaneous sq heparin dvt vte prophylaxis', cont: true },
+    { id: 'ticag_load', kind: 'med', pri: -1, name: 'Ticagrelor 180 mg PO (loading dose)', syn: 'brilinta p2y12 antiplatelet load' },
+    { id: 'ticag', kind: 'med', name: 'Ticagrelor 90 mg PO BID', syn: 'brilinta p2y12 antiplatelet', cont: true },
+    { id: 'clop_load', kind: 'med', pri: -1, name: 'Clopidogrel 600 mg PO (loading dose)', syn: 'plavix p2y12 antiplatelet load' },
+    { id: 'clop', kind: 'med', name: 'Clopidogrel 75 mg PO daily', syn: 'plavix p2y12 antiplatelet', cont: true },
+    { id: 'pras_load', kind: 'med', pri: -1, name: 'Prasugrel 60 mg PO (loading dose)', syn: 'effient p2y12 antiplatelet load' },
+    { id: 'pras', kind: 'med', name: 'Prasugrel 10 mg PO daily', syn: 'effient p2y12 antiplatelet', cont: true },
+    { id: 'atorva', kind: 'med', name: 'Atorvastatin PO daily', syn: 'lipitor statin', cont: true, doses: [[10, '10 mg'], [20, '20 mg'], [40, '40 mg'], [80, '80 mg']] },
+    { id: 'metop_po', kind: 'med', name: 'Metoprolol tartrate PO', syn: 'lopressor beta blocker', cont: true, doses: [[12.5, '12.5 mg BID'], [25, '25 mg BID'], [50, '50 mg BID']] },
+    { id: 'metop_iv', kind: 'med', name: 'Metoprolol 5 mg IV', syn: 'lopressor beta blocker' },
+    { id: 'lisinopril', kind: 'med', name: 'Lisinopril PO daily', syn: 'ace inhibitor acei', cont: true, doses: [[2.5, '2.5 mg'], [5, '5 mg'], [10, '10 mg']] },
+    { id: 'furosemide', kind: 'med', name: 'Furosemide 40 mg IV', syn: 'lasix diuretic' },
+    { id: 'atropine', kind: 'med', name: 'Atropine 1 mg IV', syn: 'bradycardia' },
+    { id: 'amio', kind: 'med', name: 'Amiodarone 300 mg IV', syn: 'antiarrhythmic acls' },
+    { id: 'epi_push', kind: 'med', name: 'Epinephrine 1 mg IV push (ACLS)', syn: 'code epi adrenaline acls' },
+    { id: 'alteplase', kind: 'med', name: 'Alteplase (tPA) IV', syn: 'tpa thrombolytic fibrinolytic lysis' },
+    { id: 'tnk', kind: 'med', name: 'Tenecteplase IV', syn: 'tnk thrombolytic fibrinolytic lysis' },
+    { id: 'nrt', kind: 'med', name: 'Nicotine patch', syn: 'nicotine replacement smoking', cont: true },
+
+    // ── Respiratory ──
+    { id: 'o2_nc', kind: 'med', name: 'Oxygen, nasal cannula', syn: 'o2 oxygen nc', cont: true, doses: [[2, '2 L/min'], [4, '4 L/min'], [6, '6 L/min']] },
+    { id: 'o2_nrb', kind: 'med', name: 'Oxygen, non-rebreather mask', syn: 'o2 oxygen nrb face mask 15l', cont: true },
+    { id: 'bipap', kind: 'proc', name: 'BiPAP (noninvasive ventilation)', syn: 'niv cpap noninvasive positive pressure', cont: true },
+    { id: 'nebs', kind: 'med', name: 'Albuterol–ipratropium nebulizer', syn: 'duoneb albuterol bronchodilator neb' },
+
+    // ── Procedures ──
+    { id: 'iv_access', kind: 'proc', name: 'Peripheral IV access ×2', syn: 'iv line large bore piv' },
+    { id: 'cvc', kind: 'proc', name: 'Central venous catheter', syn: 'central line cvc ij subclavian' },
+    { id: 'aline', kind: 'proc', name: 'Arterial line', syn: 'art line' },
+    { id: 'intubate', kind: 'proc', name: 'Endotracheal intubation + mechanical ventilation', syn: 'intubation ett ventilator airway rsi' },
+    { id: 'foley', kind: 'proc', name: 'Foley catheter', syn: 'urinary catheter' },
+    { id: 'ngt', kind: 'proc', name: 'Nasogastric tube', syn: 'ng tube ngt' },
+    { id: 'cath', kind: 'proc', name: 'Cardiac catheterization / primary PCI (activate cath lab)', syn: 'cath lab pci angiography angioplasty stent heart coronary', tat: 60 },
+    { id: 'defib', kind: 'proc', name: 'Defibrillation (unsynchronized shock)', syn: 'shock defibrillate defib' },
+    { id: 'cpr', kind: 'proc', name: 'CPR / ACLS', syn: 'code blue chest compressions resuscitation' },
+    { id: 'lp', kind: 'proc', name: 'Lumbar puncture', syn: 'lp spinal tap csf', tat: 90 },
+
+    // ── Nursing / monitoring / diet ──
+    { id: 'monitor', kind: 'nurse', name: 'Cardiac monitor (telemetry)', syn: 'tele telemetry', cont: true },
+    { id: 'pulseox', kind: 'nurse', name: 'Continuous pulse oximetry', syn: 'spo2 pulse ox', cont: true },
+    { id: 'fsg_q1h', kind: 'nurse', name: 'Fingerstick glucose every 1 hour', syn: 'accucheck poc glucose blood sugar hourly q1h monitoring', cont: true, every: 60 },
+    { id: 'io', kind: 'nurse', name: 'Strict intake and output', syn: 'i/o urine output ins outs', cont: true },
+    { id: 'npo', kind: 'nurse', name: 'NPO (nothing by mouth)', syn: 'npo', cont: true },
+    { id: 'diet_reg', kind: 'nurse', name: 'Diet: regular', syn: 'food eat meal', cont: true },
+    { id: 'diet_dm', kind: 'nurse', name: 'Diet: consistent-carbohydrate (diabetic)', syn: 'food eat meal diabetic', cont: true },
+    { id: 'diet_card', kind: 'nurse', name: 'Diet: cardiac (low sodium, low fat)', syn: 'food eat meal heart healthy', cont: true },
+    { id: 'ambulate', kind: 'nurse', name: 'Activity: ambulate as tolerated', syn: 'walk out of bed oob', cont: true },
+    { id: 'bedrest', kind: 'nurse', name: 'Activity: bed rest', syn: 'bedrest', cont: true },
+
+    // ── Consults ──
+    { id: 'con_cards', kind: 'consult', name: 'Consult: cardiology', syn: 'heart cardiologist' },
+    { id: 'con_icu', kind: 'consult', name: 'Consult: critical care', syn: 'icu micu intensivist' },
+    { id: 'con_endo', kind: 'consult', name: 'Consult: endocrinology', syn: 'diabetes endocrinologist' },
+    { id: 'con_id', kind: 'consult', name: 'Consult: infectious disease', syn: 'id infection' },
+    { id: 'con_gi', kind: 'consult', name: 'Consult: gastroenterology', syn: 'gi' },
+    { id: 'con_surg', kind: 'consult', name: 'Consult: general surgery', syn: 'surgeon' },
+    { id: 'con_pulm', kind: 'consult', name: 'Consult: pulmonology', syn: 'lung' },
+    { id: 'con_sw', kind: 'consult', name: 'Consult: social work', syn: 'case management' },
+
+    // ── Counseling / prevention ──
+    { id: 'c_smoke', kind: 'counsel', name: 'Counsel: smoking cessation', syn: 'tobacco quit smoking' },
+    { id: 'c_dm', kind: 'counsel', name: 'Counsel: diabetes education & sick-day rules', syn: 'diabetic teaching insulin education' },
+    { id: 'c_diet', kind: 'counsel', name: 'Counsel: diet and exercise', syn: 'lifestyle nutrition' },
+    { id: 'c_adhere', kind: 'counsel', name: 'Counsel: medication adherence', syn: 'compliance' },
+    { id: 'c_alcohol', kind: 'counsel', name: 'Counsel: alcohol use', syn: 'etoh drinking' },
+    { id: 'rehab', kind: 'counsel', name: 'Referral: cardiac rehabilitation', syn: 'cardiac rehab' },
+    { id: 'vax_pneumo', kind: 'counsel', name: 'Vaccine: pneumococcal', syn: 'pneumovax prevnar pcv20 immunization' },
+    { id: 'vax_flu', kind: 'counsel', name: 'Vaccine: influenza', syn: 'flu shot immunization' },
+    { id: 'followup', kind: 'counsel', name: 'Arrange outpatient follow-up', syn: 'clinic appointment pcp primary care' },
+  ];
+
+  const ITEM = Object.fromEntries(CATALOG.map(i => [i.id, i]));
+
+  // Orders that are never penalized as "unnecessary"
+  const ALWAYS_OK = new Set(['iv_access', 'monitor', 'pulseox', 'io', 'ondansetron', 'apap', 'followup', 'bedrest', 'ambulate', 'c_adhere', 'c_diet', 'vax_flu', 'fsg', 'npo']);
+
+  // ── Default (normal) results ──
+  const R = (k, v, f = '') => [k, v, f];
+  const DEFAULT_RESULTS = {
+    cbc: () => [R('WBC', '7.4 K/µL'), R('Hemoglobin', '14.1 g/dL'), R('Platelets', '248 K/µL')],
+    bmp: () => [R('Na', '139'), R('K', '4.1'), R('Cl', '103'), R('HCO₃', '25'), R('BUN', '14'), R('Creatinine', '0.9'), R('Glucose', '102')],
+    cmp: () => [R('Na', '139'), R('K', '4.1'), R('Cl', '103'), R('HCO₃', '25'), R('BUN', '14'), R('Creatinine', '0.9'), R('Glucose', '102'),
+                R('AST', '24'), R('ALT', '22'), R('Alk phos', '74'), R('Total bilirubin', '0.6'), R('Albumin', '4.1')],
+    mg: () => [R('Magnesium', '2.0 mg/dL')],
+    phos: () => [R('Phosphate', '3.4 mg/dL')],
+    lactate: () => [R('Lactate', '1.1 mmol/L')],
+    vbg: () => [R('pH', '7.37'), R('pCO₂', '45')],
+    abg: () => [R('pH', '7.41'), R('pCO₂', '40'), R('pO₂', '92')],
+    bhb: () => [R('β-hydroxybutyrate', '0.1 mmol/L')],
+    osm: () => [R('Osmolality', '290 mOsm/kg')],
+    fsg: () => [R('Glucose', '104')],
+    trop: () => [R('hs-Troponin I', '6 ng/L')],
+    bnp: () => [R('BNP', '42 pg/mL')],
+    ck: () => [R('CK', '110 U/L')],
+    lipase: () => [R('Lipase', '32 U/L')],
+    coags: () => [R('INR', '1.0'), R('aPTT', '30 s')],
+    type_screen: () => 'Type O positive. Antibody screen negative.',
+    lipid: () => [R('Total cholesterol', '182'), R('LDL', '104'), R('HDL', '48'), R('Triglycerides', '140')],
+    a1c: () => [R('HbA1c', '5.4%')],
+    tsh: () => [R('TSH', '1.8 mIU/L')],
+    cortisol: () => [R('Cortisol', '18 µg/dL')],
+    ammonia: () => [R('Ammonia', '28 µmol/L')],
+    ua: () => 'Clear, specific gravity 1.015. Negative for blood, protein, glucose, ketones, leukocyte esterase, and nitrites.',
+    ucx: () => 'No growth.',
+    bcx: () => 'No growth at 24 hours.',
+    sputum: () => 'Few PMNs, mixed oral flora.',
+    strep_ag: () => 'Negative.',
+    legion_ag: () => 'Negative.',
+    rvp: () => 'Influenza A/B, SARS-CoV-2, and RSV: not detected.',
+    procal: () => [R('Procalcitonin', '0.04 ng/mL')],
+    ddimer: () => [R('D-dimer', '0.32 µg/mL FEU')],
+    hcg: () => 'Negative.',
+    tox: () => 'Negative.',
+    etoh: () => [R('Ethanol', '<10 mg/dL')],
+    apap_lvl: () => 'Acetaminophen and salicylate: undetectable.',
+    ecg: () => 'Normal sinus rhythm, normal axis and intervals. No ST changes.',
+    ecg_right: () => 'No ST elevation in right-sided leads.',
+    cxr: () => 'No acute cardiopulmonary process.',
+    ct_head: () => 'No acute intracranial abnormality.',
+    ctpa: () => 'No pulmonary embolism.',
+    cta_aorta: () => 'No aortic dissection or aneurysm.',
+    ct_chest: () => 'No acute findings.',
+    ct_abd: () => 'No acute abdominal or pelvic process.',
+    us_ruq: () => 'Normal gallbladder and liver. No biliary dilation.',
+    echo: () => 'Normal LV size and function, EF 60%. No significant valve disease.',
+    stress: () => 'Normal exercise tolerance. No ischemic changes.',
+    lp: () => 'CSF clear. WBC 1, protein 32, glucose 64. Gram stain negative.',
+    cath: () => 'No obstructive coronary disease.',
+  };
+
+  const PROC_NOTES = {
+    iv_access: 'Two large-bore peripheral IVs placed.',
+    cvc: 'Right internal jugular central line placed under ultrasound. Tip position confirmed.',
+    aline: 'Radial arterial line placed.',
+    intubate: 'Intubated (RSI) without complication. On mechanical ventilation.',
+    foley: 'Foley catheter placed.',
+    ngt: 'Nasogastric tube placed.',
+    bipap: 'BiPAP mask applied.',
+    defib: 'Shock delivered.',
+    cpr: 'Code called. CPR in progress.',
+  };
+
+  const EXAM_SECS = [
+    ['general', 'General'], ['heent', 'HEENT'], ['neck', 'Neck'], ['cv', 'Cardiac'], ['lungs', 'Lungs'],
+    ['abd', 'Abdomen'], ['ext', 'Extremities'], ['neuro', 'Neuro'], ['skin', 'Skin'],
+  ];
+  const DEFAULT_EXAM = {
+    general: 'Well-appearing, no acute distress.',
+    heent: 'Moist mucous membranes. Pupils equal and reactive.',
+    neck: 'Supple. No JVD.',
+    cv: 'Regular rate and rhythm. No murmurs, rubs, or gallops.',
+    lungs: 'Clear to auscultation bilaterally. Normal work of breathing.',
+    abd: 'Soft, nontender, nondistended.',
+    ext: 'Warm and well perfused. No edema.',
+    neuro: 'Alert and oriented. No focal deficits.',
+    skin: 'No rashes.',
+  };
+
+  // Final diagnosis list
+  const DX = [
+    ['dka', 'Diabetic ketoacidosis'], ['hhs', 'Hyperosmolar hyperglycemic state'], ['aka', 'Alcoholic ketoacidosis'],
+    ['gastro', 'Viral gastroenteritis'], ['pancreatitis', 'Acute pancreatitis'], ['hypoglycemia', 'Hypoglycemia'],
+    ['septic_shock_pna', 'Septic shock due to pneumonia'], ['septic_shock', 'Septic shock'], ['sepsis', 'Sepsis without shock'],
+    ['cap', 'Community-acquired pneumonia'], ['urosepsis', 'Urosepsis / pyelonephritis'], ['meningitis', 'Bacterial meningitis'],
+    ['copd', 'COPD exacerbation'], ['flu', 'Influenza'], ['covid', 'COVID-19 pneumonia'], ['ards', 'ARDS'],
+    ['adhf', 'Acute decompensated heart failure'], ['cardiogenic', 'Cardiogenic shock'], ['adrenal', 'Adrenal crisis'],
+    ['stemi_rv', 'Inferior STEMI with right ventricular infarction'], ['stemi_inf', 'Inferior STEMI'], ['stemi_ant', 'Anterior STEMI'],
+    ['nstemi', 'NSTEMI'], ['ua', 'Unstable angina'], ['vf', 'Ventricular fibrillation arrest'], ['dissection', 'Aortic dissection'],
+    ['pe', 'Pulmonary embolism'], ['pericarditis', 'Acute pericarditis'], ['ptx', 'Pneumothorax'], ['gerd', 'GERD'],
+    ['stroke', 'Ischemic stroke'], ['aki', 'Acute kidney injury'], ['ugib', 'Upper GI bleed'], ['anxiety', 'Panic attack'],
+  ];
+  const DX_NAME = Object.fromEntries(DX);
+
+  // ═══════════════════════════════════════════════════════════════
+  // SIMULATION ENGINE
+  //
+  // Deterministic, one tick per simulated minute. Every player action
+  // is logged so a case can be resumed by replaying the log.
+  // ═══════════════════════════════════════════════════════════════
+
+  const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+  function bolusVol(s, o) { return o.dose === '30kg' ? 30 * s.wt : +o.dose; }
+  function runMin(s, o) {
+    const it = ITEM[o.id];
+    if (it.cont) return Infinity;
+    if (it.fluid === 'bolus') return Math.max(30, Math.round(bolusVol(s, o) / 1000 * 60));
+    return it.run || 0;
+  }
+  function isActive(s, o) { return o.stoppedAt == null && s.t >= o.at && s.t < o.at + runMin(s, o); }
+
+  function newSim(cs) {
+    const s = {
+      cs, t: 0, wt: cs.wt, loc: cs.loc, locAt: { [cs.loc]: 0 },
+      orders: [], results: [], feed: [], harms: [], fired: {}, uid: 0, log: [],
+      dead: false, ended: false, timeUp: false, dx: null,
+      fluidIn: 0, fluidTotal: 0, clIn: 0, dexRate: 0, kIn: 0,
+    };
+    // Helpers the case scripts use
+    s.on      = id => { for (let i = s.orders.length - 1; i >= 0; i--) { const o = s.orders[i]; if (o.id === id && isActive(s, o)) return o; } return null; };
+    s.onAny   = ids => ids.some(id => s.on(id));
+    s.dose    = id => { const o = s.on(id); return o ? +o.dose || 0 : 0; };
+    s.at      = ids => { ids = [].concat(ids); const o = s.orders.find(o => ids.includes(o.id)); return o ? o.at : null; };
+    s.lastAt  = ids => { ids = [].concat(ids); for (let i = s.orders.length - 1; i >= 0; i--) if (ids.includes(s.orders[i].id)) return s.orders[i].at; return null; };
+    s.first   = ids => { ids = [].concat(ids); return s.orders.find(o => ids.includes(o.id)) || null; };
+    s.count   = (ids, before = Infinity) => { ids = [].concat(ids); return s.orders.filter(o => ids.includes(o.id) && o.at <= before).length; };
+    s.p = cs.init(s);
+    s.vit = cs.vitals(s);
+    note(s, cs.stem, 'Presentation');
+    return s;
+  }
+
+  function push(s, k, h, extra) { s.feed.push({ t: s.t, k, h, ...extra }); }
+  function note(s, h, title) { push(s, 'note', h, { title }); }
+
+  function addHarm(s, h) {
+    if (s.harms.some(x => x.label === h.label)) return;
+    s.harms.push({ label: h.label, why: h.why, pts: h.pts, t: s.t });
+  }
+
+  function resultFor(s, o) {
+    const fn = (s.cs.results && s.cs.results[o.id]) || DEFAULT_RESULTS[o.id];
+    return fn ? fn(s, o) : 'Done.';
+  }
+
+  function placeOrder(s, id, dose) {
+    const it = ITEM[id];
+    if (!it) return;
+    if (it.cont) { const cur = s.on(id); if (cur) { cur.stoppedAt = s.t; cur.replaced = true; } }
+    const o = { u: ++s.uid, id, dose: dose == null ? null : dose, at: s.t, stoppedAt: null };
+    s.orders.push(o);
+    const tat = it.tat;
+    push(s, 'order', `${KIND[it.kind].ic} <b>${it.name}</b>${dose != null ? ' · ' + doseLabel(s, it, dose) : ''}`
+      + (tat != null && tat >= 5 ? ` <span class="dim">· result ~${fmtClock(s, s.t + tat, true)}</span>` : ''));
+    for (const h of s.cs.harms) if (h.ids.includes(id) && (!h.when || h.when(s, o))) addHarm(s, h);
+    if (tat != null) s.results.push({ u: o.u, id, at: s.t, readyAt: s.t + tat, out: resultFor(s, o), shown: false });
+    const msg = s.cs.onOrder && s.cs.onOrder(s, o);
+    if (msg) push(s, 'event', msg, { sev: 'info' });
+    else if (it.kind === 'consult') push(s, 'event', `${it.name.replace('Consult: ', '').replace(/^./, c => c.toUpperCase())}: "Thanks for the call. I agree with your current management. Page me with specific questions."`, { sev: 'info' });
+    else if (PROC_NOTES[id] && tat == null) push(s, 'line', PROC_NOTES[id]);
+    // A zero/short-turnaround result (fingerstick) shows right away
+    if (tat != null && tat < 5) flushResults(s);
+  }
+
+  function stopOrder(s, u) {
+    const o = s.orders.find(o => o.u === u);
+    if (!o || !isActive(s, o)) return;
+    o.stoppedAt = s.t;
+    push(s, 'stop', `${KIND[ITEM[o.id].kind].ic} Stopped <b>${ITEM[o.id].name}</b>`);
+    if (s.cs.onStop) s.cs.onStop(s, o);
+  }
+
+  function moveTo(s, loc) {
+    if (loc === s.loc) return;
+    s.loc = loc;
+    if (s.locAt[loc] == null) s.locAt[loc] = s.t;
+    push(s, 'line', `🏥 Patient moved to <b>${LOC_NAME[loc]}</b>`);
+    if (s.cs.onMove) s.cs.onMove(s, loc);
+  }
+
+  function flushResults(s) {
+    let any = false;
+    for (const r of s.results) {
+      if (r.shown || r.readyAt > s.t) continue;
+      r.shown = true; any = true;
+      push(s, 'result', r.out, { title: ITEM[r.id].name, drawn: r.at, rid: r.id });
+    }
+    return any;
+  }
+
+  // One simulated minute. Returns { interrupt, result }.
+  function tick(s) {
+    let fl = 0, cl = 0, dex = 0;
+    for (const o of s.orders) {
+      if (!isActive(s, o)) continue;
+      const it = ITEM[o.id];
+      if (it.fluid === 'bolus') { const r = bolusVol(s, o) / runMin(s, o); fl += r; cl += r * it.cl; }
+      else if (it.fluid === 'rate') { const r = +o.dose / 60; fl += r; cl += r * it.cl; if (it.dex) dex += +o.dose; }
+    }
+    s.fluidIn = fl; s.fluidTotal += fl; s.clIn = cl; s.dexRate = dex;
+    const k = s.on('kcl_fluids');
+    s.kIn = (k ? fl / 1000 * +k.dose : 0) + (s.on('kcl_iv') ? 10 / 60 : 0);
+
+    s.cs.tick(s);
+    s.t++;
+    s.vit = s.cs.vitals(s);
+
+    // Periodic results (hourly fingersticks)
+    for (const o of s.orders) {
+      const it = ITEM[o.id];
+      if (it.every && isActive(s, o) && s.t > o.at && (s.t - o.at) % it.every === 0) {
+        push(s, 'fsg', `🩸 Fingerstick glucose: <b>${Math.round(s.p.glu ?? 104)}</b>`);
+      }
+    }
+
+    let interrupt = false;
+    for (const ev of s.cs.events) {
+      if (s.fired[ev.id] != null || !ev.when(s)) continue;
+      s.fired[ev.id] = s.t;
+      const r = (ev.fire && ev.fire(s)) || {};
+      const text = typeof ev.text === 'function' ? ev.text(s) : ev.text;
+      if (text) push(s, 'event', text, { sev: ev.sev || 'warn' });
+      if (ev.harm) addHarm(s, ev.harm);
+      if (r.dead || ev.dead) s.dead = true;
+      if (!ev.quiet) interrupt = true;
+    }
+    const result = flushResults(s);
+    return { interrupt: interrupt || s.dead, result };
+  }
+
+  function advance(s, mins, untilResult, quiet) {
+    const from = s.t;
+    const target = Math.min(s.cs.maxT, s.t + mins);
+    const marker = { t: from, k: 'adv', h: '' };
+    if (!quiet) s.feed.push(marker);
+    while (s.t < target && !s.dead) {
+      const r = tick(s);
+      if (r.interrupt || (untilResult && r.result)) break;
+    }
+    marker.h = `⏩ ${fmtClock(s, from, true)} → ${fmtClock(s, s.t, true)} (${fmtDur(s.t - from)})`;
+    if (s.t >= s.cs.maxT) s.timeUp = true;
+  }
+
+  function nextResultIn(s) {
+    const pend = s.results.filter(r => !r.shown).map(r => r.readyAt);
+    return pend.length ? Math.max(1, Math.min(...pend) - s.t) : null;
+  }
+
+  function doExam(s, secs) {
+    const mins = Math.min(12, Math.max(2, secs.length * 2));
+    advance(s, mins, false, true);
+    const ex = s.cs.exam || {};
+    const rows = secs.map(k => {
+      const v = ex[k] != null ? (typeof ex[k] === 'function' ? ex[k](s) : ex[k]) : DEFAULT_EXAM[k];
+      return `<div class="exam-row"><b>${EXAM_SECS.find(e => e[0] === k)[1]}</b> ${v}</div>`;
+    }).join('');
+    push(s, 'exam', rows, { title: 'Physical exam' });
+  }
+
+  function doHistory(s) {
+    advance(s, 3, false, true);
+    push(s, 'exam', s.cs.hx(s), { title: 'Interval history' });
+  }
+
+  // Every player action goes through apply() so the log can be replayed
+  function apply(s, a) {
+    if (s.ended) return;
+    switch (a.a) {
+      case 'o': placeOrder(s, a.id, a.d); break;
+      case 'x': stopOrder(s, a.u); break;
+      case 'adv': advance(s, a.m, a.r); break;
+      case 'exam': doExam(s, a.secs); break;
+      case 'hx': doHistory(s); break;
+      case 'mv': moveTo(s, a.loc); break;
+      case 'end': s.ended = true; s.dx = a.dx; break;
+    }
+    s.log.push(a);
+  }
+
+  function replay(cs, log) {
+    const s = newSim(cs);
+    for (const a of log) apply(s, a);
+    return s;
+  }
+
+  const LOC_NAME = { ED: 'Emergency Department', Ward: 'Ward', ICU: 'ICU', Home: 'Home (discharged)' };
+
+  function fmtClock(s, t, short) {
+    const abs = s.cs.clock + t;
+    const d = Math.floor(abs / 1440) + 1;
+    const hh = String(Math.floor(abs / 60) % 24).padStart(2, '0');
+    const mm = String(abs % 60).padStart(2, '0');
+    return short ? `${d > 1 ? 'D' + d + ' ' : ''}${hh}:${mm}` : `Day ${d} · ${hh}:${mm}`;
+  }
+  function fmtDur(m) {
+    const h = Math.floor(m / 60), mm = m % 60;
+    return h ? `${h}h${mm ? ' ' + mm + 'm' : ''}` : `${mm}m`;
+  }
+  const fmtRel = t => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+
+  function doseLabel(s, it, dose) {
+    const d = (it.doses || []).find(d => String(d[0]) === String(dose));
+    if (!d) return String(dose);
+    if (it.fluid === 'bolus' && dose === '30kg') return `30 mL/kg (${(30 * s.wt / 1000).toFixed(1)} L)`;
+    if (it.perKg) return `${d[1]} (${+(dose * s.wt).toFixed(1)} ${it.perKg})`;
+    return d[1];
+  }
+
+  // Grading helper: full credit by `full` minutes, half by `half`, a quarter after that
+  function timely(t, full, half) {
+    if (t == null) return 0;
+    return t <= full ? 1 : t <= half ? 0.5 : 0.25;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CASES
+  //
+  // Each case supplies: init(s) → physiology state p, tick(s) per minute,
+  // vitals(s), results/exam overrides, events, harms, and a score rubric
+  // of { label, pts, eval(s) → { c: 0..1, note } }.
+  // ═══════════════════════════════════════════════════════════════
+
+  const ABX = ['ceftriaxone', 'azithro', 'levo', 'doxy', 'piptazo', 'cefepime', 'vanc', 'meropenem', 'amp_sulb', 'metronidazole'];
+  const PRESSORS = ['norepi', 'vaso', 'epi_inf', 'dopa', 'phenyl'];
+  const NITRATES = ['nitro_sl', 'nitro_drip'];
+  const NSAIDS = ['ibuprofen', 'ketorolac'];
+  const LYTICS = ['alteplase', 'tnk'];
+  const DIETS = ['diet_reg', 'diet_dm', 'diet_card'];
+  const ISO_BOLUS = ['ns_bolus', 'lr_bolus'];
+  const DEX_FLUIDS = ['d5_half', 'd5w'];
+
+  // ── Case 1: Septic shock from pneumococcal pneumonia ───────────────
+  const SEPSIS = {
+    id: 'sepsis',
+    who: '67-year-old woman', where: 'Emergency Department', cc: 'Fever, cough, and confusion',
+    dxName: 'Septic shock due to pneumococcal community-acquired pneumonia',
+    dx: { septic_shock_pna: 1, septic_shock: 0.9, cap: 0.6, sepsis: 0.5 },
+    wt: 70, loc: 'ED', clock: 9 * 60 + 10, maxT: 48 * 60,
+    stem: `<p>Brought in by her daughter. Three days of productive cough and fever. This morning she was confused and couldn't get out of bed.</p>
+           <p><b>PMH:</b> type 2 diabetes (metformin), hypertension (lisinopril), COPD. Smokes 1 pack/day. No hospitalizations or antibiotics in the past year. No known drug allergies. Weight 70 kg.</p>`,
+
+    init: () => ({ glu: 231, infl: 1, map: 59, lact: 4.6, cr: 1.9, goodMin: 0, lowMin: 0, alert: false, diuresis: 0, excess: 0, abxMin: 0, lowAfterFluid: 0 }),
+
+    tick(s) {
+      const p = s.p;
+      const abx = s.onAny(['ceftriaxone', 'cefepime', 'piptazo', 'meropenem', 'amp_sulb', 'levo']);
+      // Antibiotics take a few hours to bend the inflammatory curve
+      if (abx) p.abxMin++;
+      if (!abx) p.infl = Math.min(2, p.infl + 1 / (16 * 60));
+      else if (p.abxMin > 240) p.infl = Math.max(0, p.infl - 1 / (20 * 60));
+      const fl = s.fluidTotal / 1000;
+      let press = Math.min(s.dose('norepi'), 0.5) * 70 + (s.on('vaso') ? 5 : 0) + s.dose('dopa') * 0.8
+        + s.dose('phenyl') * 6 + Math.min(s.dose('epi_inf'), 0.3) * 90;
+      const hc = s.at('hydrocort');
+      if (hc != null && s.on('hydrocort') && s.t - hc > 360) press += 3;
+      const target = 70 - 14 * p.infl + Math.min(fl, 2.5) * 2.4 + press - (s.at('intubate') != null ? 4 : 0);
+      p.map += (target - p.map) * 0.1;
+      if (p.map >= 65) {
+        p.goodMin++;
+        p.lact += (1.1 - p.lact) * (abx ? 0.006 : 0.003);
+        p.cr = Math.max(0.9, p.cr - 0.0006);
+      } else {
+        p.lact = Math.min(9, p.lact + 0.003);
+        p.cr += 0.0003;
+      }
+      p.lowMin = p.map < 50 ? p.lowMin + 1 : 0;
+      if (s.fluidTotal >= 2000 && p.map < 65) p.lowAfterFluid++;
+      p.alert = p.goodMin > 120 && p.lact < 2.5;
+      p.excess = Math.max(0, fl - 5.5 - p.diuresis);
+    },
+
+    vitals(s) {
+      const p = s.p;
+      const apap = s.lastAt('apap');
+      const temp = 37 + 2.2 * p.infl - (apap != null && s.t - apap < 360 ? 1.1 : 0);
+      const o2 = s.on('o2_nc') ? { 2: 4, 4: 6, 6: 7 }[s.dose('o2_nc')] : s.on('o2_nrb') ? 9 : s.on('bipap') ? 8 : 0;
+      const intub = s.at('intubate') != null;
+      const spo2 = clamp(Math.round(88 - 3 * (p.infl - 1) + (intub ? 10 : o2) - p.excess * 4), 70, 99);
+      const hr = Math.round(92 + 18 * p.infl + (temp - 37) * 4 - Math.min(s.fluidTotal / 1000, 3) * 3 + s.dose('dopa') * 1.5 + s.dose('epi_inf') * 60);
+      const dbp = Math.round(p.map - 38 / 3), sbp = dbp + 38;
+      return { hr, sbp, dbp, rr: intub ? 16 : Math.round(16 + 10 * p.infl + p.excess * 3), spo2, temp, rhythm: hr > 100 ? 'Sinus tachycardia' : 'Sinus rhythm' };
+    },
+
+    results: {
+      cbc: s => [R('WBC', (8 + 10.4 * s.p.infl).toFixed(1) + ' K/µL', 'H'), R('Bands', Math.round(4 + 10 * s.p.infl) + '%', s.p.infl > 0.3 ? 'H' : ''), R('Hemoglobin', '12.6 g/dL'), R('Platelets', '165 K/µL')],
+      bmp: s => sepsisChem(s, false),
+      cmp: s => sepsisChem(s, true),
+      lactate: s => [R('Lactate', s.p.lact.toFixed(1) + ' mmol/L', s.p.lact > 2 ? 'H' : '')],
+      vbg: s => [R('pH', (7.41 - (s.p.lact - 1) * 0.03).toFixed(2), s.p.lact > 2 ? 'L' : ''), R('pCO₂', '32', 'L')],
+      abg: s => { const sp = s.vit.spo2; const po2 = sp >= 98 ? 110 : sp >= 95 ? 82 : sp >= 92 ? 66 : sp >= 88 ? 56 : 48;
+                  return [R('pH', (7.43 - (s.p.lact - 1) * 0.03).toFixed(2), s.p.lact > 2 ? 'L' : ''), R('pCO₂', '30', 'L'), R('pO₂', String(po2), po2 < 80 ? 'L' : '')]; },
+      bcx: s => {
+        const abxAt = s.at(ABX);
+        if (abxAt != null && abxAt < s.t) return 'No growth. (Drawn after antibiotics were started.)';
+        return '<b>2 of 2 bottles:</b> Gram-positive cocci in pairs → <b>Streptococcus pneumoniae</b>. Susceptible to penicillin, ceftriaxone, and levofloxacin.';
+      },
+      sputum: () => 'Many PMNs, few epithelial cells. Abundant <b>gram-positive lancet-shaped diplococci</b>. Culture pending.',
+      strep_ag: () => '<b>Positive.</b>',
+      legion_ag: () => 'Negative.',
+      rvp: () => 'Influenza A/B, SARS-CoV-2, and RSV: not detected.',
+      procal: s => [R('Procalcitonin', (14 * s.p.infl + 0.3).toFixed(1) + ' ng/mL', 'H')],
+      cxr: s => 'Dense <b>right lower lobe consolidation</b> with air bronchograms. No effusion.' + (s.p.excess > 0.3 ? ' <b>New bilateral interstitial edema and small effusions.</b>' : ''),
+      ct_chest: () => 'Dense right lower lobe consolidation with air bronchograms. No abscess or empyema.',
+      ecg: s => `Sinus ${s.vit.hr > 100 ? 'tachycardia' : 'rhythm'} at ${s.vit.hr}. No acute ST changes.`,
+      trop: () => [R('hs-Troponin I', '22 ng/L')],
+      bnp: () => [R('BNP', '180 pg/mL', 'H')],
+      coags: () => [R('INR', '1.3', 'H'), R('aPTT', '34 s')],
+      ua: () => 'Specific gravity 1.028. Trace protein. Negative leukocyte esterase and nitrites. 0–2 WBC/hpf.',
+      echo: s => s.p.excess > 0.3 ? 'Hyperdynamic LV, EF 70%. Dilated IVC without respiratory variation.' : 'Hyperdynamic LV, EF 70%. Small, collapsing IVC. No RV dilation.',
+      fsg: () => [R('Glucose', '231', 'H')],
+    },
+
+    exam: {
+      general: s => s.p.alert ? 'Tired but alert and conversant.' : 'Ill-appearing and flushed. Confused, oriented to self only.',
+      heent: s => s.fluidTotal > 2000 ? 'Mucous membranes moist.' : 'Dry mucous membranes.',
+      neck: s => s.p.excess > 0.3 ? 'JVP elevated to 12 cm.' : 'Supple, no meningismus. JVP flat.',
+      cv: s => `${s.vit.hr > 100 ? 'Tachycardic' : 'Regular rate'}, regular. No murmurs. Capillary refill ${s.p.map >= 65 ? '2' : '4'} seconds.`,
+      lungs: s => 'Crackles and bronchial breath sounds at the right base, with egophony.' + (s.p.excess > 0.3 ? ' <b>New bilateral crackles.</b>' : '') + (s.p.infl > 0.6 ? ' Mild accessory muscle use.' : ''),
+      abd: 'Soft, nontender.',
+      ext: s => s.p.map >= 65 && s.p.lact < 2.5 ? 'Warm. No edema.' : 'Cool hands and feet. Mottling over the knees.',
+      neuro: s => s.p.alert ? 'Alert and oriented ×3. Nonfocal.' : 'Oriented to self only. Moves all extremities. No focal deficits.',
+      skin: 'No rash.',
+    },
+
+    hx: s => s.p.alert
+      ? '"I feel a lot better. Still coughing." She asks when she can go home.'
+      : 'She is too confused to give a history. Her daughter says she has been coughing up rust-colored sputum and had shaking chills last night. No vomiting or diarrhea, no urinary complaints.',
+
+    onOrder(s, o) {
+      if (o.id === 'con_icu') return 'Critical care: "We\'ll take her. Transfer to the ICU when you\'re ready."';
+      if (o.id === 'con_id') return 'Infectious disease: "Agree with treating as severe CAP. Narrow once you have cultures."';
+      if (o.id === 'furosemide') s.p.diuresis += 1;
+      return null;
+    },
+
+    onMove(s, loc) {
+      if (loc === 'Ward' && s.onAny(PRESSORS))
+        addHarm(s, { label: 'Vasopressors on the ward', why: 'Patients on vasopressors need ICU-level monitoring.', pts: 5 });
+      if (loc === 'Home') {
+        const abxAt = s.at(ABX);
+        if (s.onAny(PRESSORS) || abxAt == null || s.t - abxAt < 36 * 60 || s.p.map < 65)
+          addHarm(s, { label: 'Unsafe discharge', why: 'She was discharged while still in septic shock or early in treatment.', pts: 20 });
+      }
+    },
+
+    events: [
+      { id: 'nurse_map', when: s => s.fluidTotal >= 2000 && s.p.map < 65 && !s.onAny(PRESSORS),
+        text: s => `Nurse: "She's had ${(s.fluidTotal / 1000).toFixed(1)} L and her MAP is still ${Math.round(s.p.map)}. She's still confused and her hands are cold."` },
+      { id: 'worse', when: s => s.t >= 360 && s.at(ABX) == null, sev: 'bad',
+        text: s => `She is more obtunded and mottled to the thighs. BP ${s.vit.sbp}/${s.vit.dbp}.` },
+      { id: 'edema', when: s => s.p.excess > 0.3,
+        text: s => `New bilateral crackles. SpO₂ has fallen to ${s.vit.spo2}% and she is working harder to breathe.`,
+        harm: { label: 'Fluid overload', why: 'After the initial 30 mL/kg, reassess before giving more. Persistent hypotension calls for a vasopressor, not more liters.', pts: 6 } },
+      { id: 'arrest', when: s => (s.t >= 720 && s.at(ABX) == null) || s.p.lowMin >= 150, sev: 'bad', dead: true,
+        text: 'Pulseless electrical activity arrest. Despite ACLS she cannot be resuscitated.' },
+      { id: 'wean', when: s => s.onAny(PRESSORS) && s.at(ABX) != null && s.t - s.at(ABX) > 16 * 60 && s.p.map > 78, sev: 'info',
+        text: 'Nurse: "MAP has been in the high 70s, so I\'ve weaned the pressors off per protocol."',
+        fire: s => { for (const o of s.orders) if (PRESSORS.includes(o.id) && isActive(s, o)) o.stoppedAt = s.t; } },
+      { id: 'better', when: s => s.at(ABX) != null && s.t - s.at(ABX) >= 22 * 60 && s.p.map >= 65 && s.p.alert, sev: 'info',
+        text: 'She is sitting up, more alert, and asking for breakfast. Her daughter is at the bedside.' },
+    ],
+
+    harms: [
+      { ids: ['bipap'], when: s => !s.p.alert, label: 'BiPAP in a confused patient', pts: 5,
+        why: 'Altered mental status is a contraindication to noninvasive ventilation because of aspiration risk. She was oxygenating on nasal cannula.' },
+      { ids: ['intubate'], label: 'Intubation without a clear indication', pts: 6,
+        why: 'She was protecting her airway and oxygenating on supplemental O₂. Induction and positive pressure can push septic shock into arrest.' },
+      { ids: ['metop_iv', 'metop_po'], label: 'Beta-blocker in shock', pts: 8, why: 'It blunts the compensatory tachycardia that is keeping her perfused.' },
+      { ids: NITRATES, label: 'Nitrates while hypotensive', pts: 8, why: 'Vasodilating a patient in shock worsens hypotension.' },
+      { ids: ['furosemide'], when: s => s.p.excess < 0.3, label: 'Diuretic in septic shock', pts: 5, why: 'She is volume-depleted and hypotensive.' },
+      { ids: NSAIDS, label: 'NSAID with acute kidney injury', pts: 4, why: 'NSAIDs worsen AKI in a hypoperfused patient.' },
+      { ids: ['metformin'], label: 'Metformin with AKI and lactic acidosis', pts: 4, why: 'Hold metformin during shock, AKI, and lactic acidosis.' },
+      { ids: ['lisinopril'], label: 'ACE inhibitor in shock', pts: 4, why: 'Hold antihypertensives while she is hypotensive with AKI.' },
+    ],
+
+    ok: ['o2_nc', 'o2_nrb', 'cbc', 'bmp', 'cmp', 'lactate', 'vbg', 'abg', 'bcx', 'sputum', 'ua', 'ucx', 'strep_ag', 'legion_ag', 'rvp', 'procal',
+         'coags', 'cxr', 'ecg', 'trop', 'bnp', 'mg', 'phos', 'ns_bolus', 'lr_bolus', 'ns_inf', 'lr_inf', 'ceftriaxone', 'azithro', 'levo', 'doxy',
+         'piptazo', 'cefepime', 'vanc', 'amp_sulb', 'meropenem', 'norepi', 'vaso', 'hydrocort', 'albumin', 'cvc', 'aline', 'foley',
+         'enox_ppx', 'hep_sc', 'lispro', 'con_icu', 'con_id', 'c_smoke', 'nrt', 'vax_pneumo', 'echo', 'diet_dm', 'diet_reg', 'oseltamivir', 'ct_chest'],
+
+    score: [
+      { label: 'Oxygen for hypoxemia', pts: 5, eval: s => {
+        const t = s.at(['o2_nc', 'o2_nrb', 'bipap', 'intubate']);
+        return { c: timely(t, 15, 60), note: t == null ? 'SpO₂ was 88% on room air.' : `Started at ${fmtRel(t)}` }; } },
+      { label: 'Lactate measured', pts: 6, eval: s => {
+        const t = s.at('lactate');
+        return { c: timely(t, 60, 180), note: t == null ? 'Never checked.' : `Drawn at ${fmtRel(t)} (goal: within 1 h)` }; } },
+      { label: 'Blood cultures before antibiotics', pts: 8, eval: s => {
+        const b = s.at('bcx'), a = s.at(ABX);
+        if (b == null) return { c: 0, note: 'Never drawn.' };
+        if (a != null && b > a) return { c: 0.3, note: `Drawn ${fmtDur(b - a)} after antibiotics, and they came back sterile.` };
+        return { c: 1, note: `Drawn at ${fmtRel(b)}` }; } },
+      { label: 'Appropriate antibiotics within 1 hour', pts: 18, eval: s => {
+        const a = s.at(ABX);
+        if (a == null) return { c: 0, note: 'No antibiotics given.' };
+        const by = id => { const t = s.at(id); return t != null && t <= a + 60; };
+        const narrowBL = by('ceftriaxone') || by('amp_sulb');
+        const broadBL = by('piptazo') || by('cefepime') || by('meropenem');
+        const atyp = by('azithro') || by('doxy') || by('levo');
+        let c, why;
+        if ((narrowBL || broadBL) && atyp) { c = narrowBL ? 1 : 0.8; why = narrowBL ? 'β-lactam + atypical coverage' : 'Broader than needed: no MRSA or Pseudomonas risk factors'; }
+        else if (by('levo')) { c = 0.6; why = 'Fluoroquinolone monotherapy is not recommended for severe (ICU) CAP; add a β-lactam'; }
+        else if (narrowBL || broadBL) { c = 0.5; why = 'Missing atypical coverage (macrolide, doxycycline, or fluoroquinolone)'; }
+        else { c = 0.3; why = 'Regimen doesn\'t cover pneumococcus adequately'; }
+        if (by('vanc') && c > 0.6) { c -= 0.1; why += '. Vancomycin wasn\'t needed without MRSA risk factors'; }
+        const tf = a <= 60 ? 1 : a <= 120 ? 0.7 : a <= 180 ? 0.5 : 0.25;
+        return { c: c * tf, note: `${why}. First dose at ${fmtRel(a)}.` }; } },
+      { label: '30 mL/kg crystalloid within 3 hours', pts: 12, eval: s => {
+        const vol = s.orders.filter(o => ISO_BOLUS.includes(o.id) && o.at <= 180).reduce((a, o) => a + bolusVol(s, o), 0);
+        return { c: vol >= 2000 ? 1 : vol >= 1000 ? 0.5 : 0, note: `${(vol / 1000).toFixed(1)} L ordered in the first 3 h (target ≈ 2.1 L)` }; } },
+      { label: 'Norepinephrine for persistent hypotension', pts: 14, eval: s => {
+        const ne = s.at('norepi'), any = s.at(PRESSORS);
+        if (any == null) return s.p.lowAfterFluid > 90
+          ? { c: 0, note: 'MAP stayed below 65 after fluids, and no vasopressor was started.' }
+          : { c: s.fluidTotal >= 2000 ? 1 : 0, note: s.fluidTotal >= 2000 ? 'MAP recovered after fluids.' : 'Never fluid-resuscitated, so persistent hypotension was never assessed.' };
+        if (ne == null || ne > any) return { c: 0.5, note: 'Norepinephrine is the first-line vasopressor in septic shock.' };
+        return { c: timely(ne, 240, 360), note: `Started at ${fmtRel(ne)}` }; } },
+      { label: 'Repeat lactate', pts: 5, eval: s => {
+        const ls = s.orders.filter(o => o.id === 'lactate');
+        if (ls.length < 2) return { c: 0, note: 'Initial lactate was elevated. Recheck within 2–4 h to confirm clearance.' };
+        return { c: ls[1].at - ls[0].at <= 360 ? 1 : 0.5, note: `Rechecked at ${fmtRel(ls[1].at)}` }; } },
+      { label: 'ICU admission', pts: 8, eval: s => {
+        const t = s.locAt.ICU;
+        return { c: timely(t, 360, 720), note: t == null ? 'Septic shock on vasopressors needs the ICU.' : `Transferred at ${fmtRel(t)}` }; } },
+      { label: 'Chest x-ray', pts: 4, eval: s => ({ c: timely(s.at('cxr'), 120, 360), note: s.at('cxr') == null ? 'Confirms the source.' : '' }) },
+      { label: 'VTE prophylaxis', pts: 4, eval: s => {
+        const t = s.at(['enox_ppx', 'hep_sc']);
+        return { c: t != null && t <= 1440 ? 1 : t != null ? 0.5 : 0, note: t == null ? 'Every immobile ICU patient needs it.' : '' }; } },
+      { label: 'Prevention: smoking cessation + pneumococcal vaccine', pts: 6, eval: s => {
+        const a = s.at(['c_smoke', 'nrt']) != null, b = s.at('vax_pneumo') != null;
+        return { c: (a ? 0.5 : 0) + (b ? 0.5 : 0), note: [!a && 'no smoking cessation', !b && 'no pneumococcal vaccine'].filter(Boolean).join(', ') }; } },
+      { label: 'Correct diagnosis', pts: 8, eval: s => dxEval(s) },
+    ],
+
+    pearls: [
+      '<b>Hour-1 bundle:</b> lactate, blood cultures <i>before</i> antibiotics, broad-spectrum antibiotics, 30 mL/kg crystalloid for hypotension or lactate ≥ 4, and vasopressors if MAP stays &lt; 65.',
+      'Severe CAP (ICU): <b>β-lactam + macrolide</b> (or + respiratory fluoroquinolone). Add MRSA or Pseudomonas coverage only with risk factors.',
+      '<b>Norepinephrine</b> is the first-line vasopressor. Peripheral norepinephrine is fine short-term while a central line goes in.',
+      'Reassess after the initial bolus. Persistent hypotension needs pressors, not endless liters.',
+      'Cultures drawn after antibiotics are often sterile, so draw them first. It only takes minutes.',
+      'Don\'t forget VTE prophylaxis, holding metformin/ACE inhibitors in AKI, smoking cessation, and vaccines.',
+    ],
+  };
+
+  function sepsisChem(s, full) {
+    const p = s.p;
+    const hco3 = Math.round(24 - (p.lact - 1) * 2);
+    const rows = [R('Na', '134', 'L'), R('K', '4.2'), R('Cl', '101'), R('HCO₃', String(hco3), hco3 < 22 ? 'L' : ''),
+      R('BUN', String(Math.round(14 + p.cr * 13)), 'H'), R('Creatinine', p.cr.toFixed(1), p.cr > 1.1 ? 'H' : ''), R('Glucose', '236', 'H'),
+      R('Anion gap', String(134 - 101 - hco3), 134 - 101 - hco3 > 12 ? 'H' : '')];
+    if (full) rows.push(R('AST', '34'), R('ALT', '29'), R('Alk phos', '88'), R('Total bilirubin', '0.9'), R('Albumin', '3.0', 'L'));
+    return rows;
+  }
+
+  // ── Case 2: Inferior STEMI with RV infarction ──────────────────────
+  const VF_AT = 22;
+  const STEMI = {
+    id: 'stemi',
+    who: '58-year-old man', where: 'Emergency Department', cc: 'Crushing chest pressure',
+    dxName: 'Inferior STEMI with right ventricular infarction (proximal RCA), complicated by VF arrest',
+    dx: { stemi_rv: 1, stemi_inf: 0.85, nstemi: 0.2, ua: 0.1, vf: 0.3 },
+    wt: 88, loc: 'ED', clock: 6 * 60 + 40, maxT: 72 * 60,
+    stem: `<p>Crushing substernal chest pressure that started 50 minutes ago while he was shoveling snow. It radiates to his jaw, with nausea and sweating.</p>
+           <p><b>PMH:</b> hypertension, hyperlipidemia. Smokes 1 pack/day for 35 years. <b>Meds:</b> amlodipine. No known drug allergies. Weight 88 kg.</p>`,
+
+    init: () => ({ glu: 142, occl: true, vf: false, vfAt: null, vfDone: false, cpr: false, reperfAt: null, cathAt: null, lysisAt: null, nitroHypo: false, nitroAt: null, nitroFluid0: 0 }),
+
+    tick(s) {
+      const p = s.p;
+      if (p.occl && p.reperfAt != null && s.t >= p.reperfAt) p.occl = false;
+      if (p.nitroHypo) {
+        const drip = s.on('nitro_drip');
+        if (!drip && (s.fluidTotal - p.nitroFluid0 >= 500 || s.t - p.nitroAt > 45)) p.nitroHypo = false;
+      }
+    },
+
+    vitals(s) {
+      const p = s.p;
+      if (p.vf) return { hr: null, sbp: null, dbp: null, rr: 0, spo2: null, temp: 36.6, rhythm: 'VENTRICULAR FIBRILLATION', alarm: true };
+      const recent = (id, m) => { const t = s.lastAt(id); return t != null && s.t - t < m; };
+      let hr = p.occl ? 56 : 76;
+      if (p.vfDone && p.occl) hr = 88;
+      if (recent('metop_iv', 240)) hr -= 12;
+      if (recent('atropine', 30)) hr += 20;
+      let sbp = (p.occl ? 102 : 118) + Math.min(s.fluidTotal / 1000, 1.5) * 8;
+      if (p.nitroHypo) sbp -= 30;
+      if (recent('morphine', 60)) sbp -= 8;
+      if (recent('fentanyl', 60)) sbp -= 4;
+      if (recent('metop_iv', 240)) sbp -= 8;
+      sbp = Math.round(sbp);
+      return { hr, sbp, dbp: Math.round(sbp * 0.64), rr: p.occl ? 20 : 15, spo2: s.onAny(['o2_nc', 'o2_nrb']) ? 98 : 95, temp: 36.7,
+               rhythm: hr < 60 ? 'Sinus bradycardia' : 'Sinus rhythm' };
+    },
+
+    results: {
+      ecg: s => {
+        if (s.p.vf) return 'Ventricular fibrillation.';
+        if (s.p.occl) return `Sinus ${s.vit.hr < 60 ? 'bradycardia' : 'rhythm'} at ${s.vit.hr}. <b>3 mm ST elevation in II, III, and aVF</b> (III > II). Reciprocal ST depression in I and aVL. 1 mm ST elevation in V1.`;
+        return 'Sinus rhythm at 76. Inferior ST elevation resolving. New Q waves in III and aVF.';
+      },
+      ecg_right: s => s.p.occl || (s.p.reperfAt != null && s.t - s.p.reperfAt < 360)
+        ? '<b>1.5 mm ST elevation in V4R</b>, consistent with right ventricular infarction.' : 'No ST elevation in right-sided leads.',
+      trop: s => { const m = s.t + 50; const v = Math.round(Math.min(48000, 40 + 3 * Math.pow(m, 1.3))); return [R('hs-Troponin I', v.toLocaleString() + ' ng/L', 'H')]; },
+      cbc: () => [R('WBC', '10.8 K/µL', 'H'), R('Hemoglobin', '15.2 g/dL'), R('Platelets', '262 K/µL')],
+      bmp: () => [R('Na', '139'), R('K', '3.9'), R('Cl', '102'), R('HCO₃', '23'), R('BUN', '16'), R('Creatinine', '1.0'), R('Glucose', '142', 'H')],
+      mg: () => [R('Magnesium', '1.9 mg/dL')],
+      lipid: () => [R('Total cholesterol', '238', 'H'), R('LDL', '162', 'H'), R('HDL', '34', 'L'), R('Triglycerides', '210', 'H')],
+      a1c: () => [R('HbA1c', '5.9%', 'H')],
+      cxr: () => 'Normal heart size. Clear lungs. Normal mediastinal contour.',
+      echo: s => s.p.occl
+        ? 'Inferior wall and RV free wall akinesis. LVEF 45%. RV dilated and hypokinetic. No pericardial effusion.'
+        : 'LVEF 50% with inferior hypokinesis. RV mildly dilated with improving function. No VSD, no significant mitral regurgitation, no effusion.',
+      bnp: () => [R('BNP', '88 pg/mL')],
+      cath: s => `<b>100% thrombotic occlusion of the proximal right coronary artery.</b> Aspiration thrombectomy and drug-eluting stent; TIMI 3 flow restored. Mild disease elsewhere. <b>Door-to-balloon: ${s.t + 45} minutes.</b> He's back from the cath lab and in your care.`,
+      cta_aorta: () => 'No aortic dissection.',
+      ctpa: () => 'No pulmonary embolism.',
+      ddimer: () => [R('D-dimer', '0.41 µg/mL FEU')],
+    },
+
+    exam: {
+      general: s => s.p.occl ? 'Diaphoretic, gray, clutching his chest. Pain 8/10.' : 'Comfortable. Pain-free.',
+      neck: s => s.p.occl ? '<b>JVP elevated to 10 cm</b>, rising with inspiration (Kussmaul sign).' : 'JVP 7 cm.',
+      cv: s => `${s.vit.hr < 60 ? 'Bradycardic' : 'Regular rate'}, regular. S4. No murmurs or rubs.`,
+      lungs: '<b>Clear</b> bilaterally.',
+      ext: s => s.p.occl ? 'Cool and clammy. No edema. Pulses equal bilaterally.' : 'Warm. No edema. Right radial site clean.',
+      neuro: 'Alert and oriented. Nonfocal.',
+    },
+
+    hx: s => s.p.occl
+      ? '"It\'s like an elephant on my chest." Pain is constant, 8/10, not positional. No tearing sensation to the back. No recent surgery or bleeding. Never had this before.'
+      : '"I feel like a new man." No chest pain. He wants to know when he can go back to shoveling.',
+
+    onOrder(s, o) {
+      const p = s.p;
+      if (o.id === 'cath') {
+        if (p.cathAt != null) return 'The cath lab already has him.';
+        p.cathAt = s.t;
+        p.reperfAt = Math.min(p.reperfAt ?? Infinity, s.t + 45);
+        return 'Cath lab activated. The team is about 30 minutes out.';
+      }
+      if (o.id === 'defib') {
+        if (p.vf) { p.vf = false; p.vfDone = true; return 'Shock delivered (200 J biphasic). <b>ROSC:</b> sinus rhythm at 88, BP 98/62. He groans and opens his eyes.'; }
+        return 'Shock delivered to a patient with a pulse.';
+      }
+      if (o.id === 'cpr') { if (p.vf) { p.cpr = true; return 'Code called. High-quality CPR started. The rhythm is still VF.'; } return 'He has a pulse. The code is cancelled.'; }
+      if (LYTICS.includes(o.id)) { p.lysisAt = s.t; if (p.occl) p.reperfAt = Math.min(p.reperfAt ?? Infinity, s.t + 40); }
+      if (NITRATES.includes(o.id) && (p.occl || (p.reperfAt != null && s.t - p.reperfAt < 720))) {
+        p.nitroHypo = true; p.nitroAt = s.t; p.nitroFluid0 = s.fluidTotal;
+        return `A few minutes after the nitroglycerin he turns gray and lightheaded. BP ${Math.round(s.vit.sbp - 30)}/${Math.round((s.vit.sbp - 30) * 0.64)}.`;
+      }
+      if (o.id === 'con_cards') return p.reperfAt != null ? 'Cardiology: "We\'re following. Thanks."'
+        : 'Interventional cardiology: "If this is a STEMI, activate the cath lab. Put in the order for emergent catheterization and we\'ll take him."';
+      if (o.id === 'epi_push' || o.id === 'amio') return p.vf ? 'Given. He is still in VF. Shock him.' : null;
+      return null;
+    },
+
+    onMove(s, loc) {
+      if (loc === 'Home' && (s.p.reperfAt == null || s.t - s.p.reperfAt < 24 * 60))
+        addHarm(s, { label: 'Unsafe discharge', why: 'Discharging an acute MI before reperfusion and monitoring is dangerous.', pts: 20 });
+    },
+
+    locLabel(s) {
+      const c = s.p.cathAt;
+      return c != null && s.t >= c + 30 && s.t < c + 60 ? 'Cath lab' : null;
+    },
+
+    events: [
+      { id: 'vf', when: s => s.p.occl && s.t >= VF_AT && !s.p.vfDone, sev: 'bad',
+        text: '🚨 <b>Monitor alarm: ventricular fibrillation.</b> He is unresponsive and pulseless.',
+        fire: s => { s.p.vf = true; s.p.vfAt = s.t; } },
+      { id: 'vf_death', when: s => s.p.vf && s.t - s.p.vfAt >= (s.p.cpr ? 10 : 4), sev: 'bad', dead: true,
+        text: 'Despite resuscitation efforts, he never regains a pulse.' },
+      { id: 'cath_go', when: s => s.p.cathAt != null && s.t >= s.p.cathAt + 30, sev: 'info', quiet: true,
+        text: 'The cath lab team is ready and he goes to the lab.' },
+      { id: 'reperf', when: s => s.p.reperfAt != null && s.t >= s.p.reperfAt, sev: 'info', quiet: true,
+        text: s => s.p.cathAt != null && s.p.reperfAt === s.p.cathAt + 45 ? 'Cath lab: wire across the lesion, RCA flow restored. His chest pain is easing.' : 'ST elevations resolving after fibrinolysis. His pain is easing.' },
+      { id: 'shock', when: s => s.p.occl && s.t >= 240, sev: 'bad',
+        text: 'Still crushing chest pain. BP 86/52, cool and clammy, and new crackles at both bases.' },
+      { id: 'death_occl', when: s => s.p.occl && s.t >= 720, sev: 'bad', dead: true,
+        text: 'Cardiogenic shock progresses to PEA arrest. He cannot be resuscitated.' },
+      { id: 'day2', when: s => s.p.reperfAt != null && s.t >= s.p.reperfAt + 20 * 60, sev: 'info',
+        text: 'He is pain-free, walking the halls, and asking when he can go home.' },
+    ],
+
+    harms: [
+      { ids: NITRATES, when: s => s.p.occl || (s.p.reperfAt != null && s.t - s.p.reperfAt < 720), label: 'Nitrates in RV infarction', pts: 8,
+        why: 'Inferior STEMI with JVD and clear lungs (ST elevation in V4R) means RV infarction. RV output is preload-dependent, so nitrates can cause profound hypotension. Give fluids instead.' },
+      { ids: LYTICS, label: 'Fibrinolysis at a PCI-capable center', pts: 8,
+        why: 'Primary PCI within 90 minutes beats fibrinolysis and avoids the risk of intracranial hemorrhage. Lyse only when PCI can\'t happen within 120 minutes.' },
+      { ids: ['defib'], when: s => !s.p.vf, label: 'Shocked a patient with a pulse', pts: 8, why: 'Unsynchronized shocks are only for pulseless VF/VT.' },
+      { ids: ['metop_iv'], when: s => s.p.occl || s.vit.hr < 60 || s.vit.sbp < 100, label: 'IV beta-blocker with bradycardia / RV infarction', pts: 6,
+        why: 'Early IV beta-blockade increases cardiogenic shock in patients who are bradycardic, hypotensive, or at risk of low output (COMMIT). Start oral metoprolol once he is stable.' },
+      { ids: ['furosemide'], label: 'Diuretic in RV infarction', pts: 5, why: 'His RV is preload-dependent and his lungs are clear.' },
+      { ids: NSAIDS, label: 'NSAID in acute MI', pts: 5, why: 'NSAIDs increase reinfarction, heart failure, and myocardial rupture.' },
+      { ids: ['stress'], label: 'Stress testing during an active STEMI', pts: 10, why: 'Never stress an evolving infarct. He needs the cath lab.' },
+    ],
+
+    ok: ['ecg', 'ecg_right', 'trop', 'cbc', 'bmp', 'cmp', 'mg', 'coags', 'lipid', 'a1c', 'cxr', 'echo', 'bnp', 'type_screen',
+         'asa_load', 'asa', 'ticag_load', 'ticag', 'clop_load', 'clop', 'pras_load', 'pras', 'heparin_drip', 'enox_tx', 'cath', 'con_cards',
+         'defib', 'cpr', 'epi_push', 'amio', 'atorva', 'metop_po', 'lisinopril', 'morphine', 'fentanyl', 'ns_bolus', 'lr_bolus', 'o2_nc', 'o2_nrb',
+         'diet_card', 'c_smoke', 'nrt', 'rehab', 'con_icu', 'atropine', 'pantoprazole'],
+
+    score: [
+      { label: 'ECG within 10 minutes', pts: 8, eval: s => { const t = s.at('ecg'); return { c: timely(t, 10, 20), note: t == null ? 'Never obtained.' : `Obtained at ${fmtRel(t)}` }; } },
+      { label: 'Aspirin, chewed', pts: 10, eval: s => { const t = s.at('asa_load'); return { c: timely(t, 30, 90), note: t == null ? 'Aspirin 162–325 mg chewed is a mortality-reducing first step.' : `Given at ${fmtRel(t)}` }; } },
+      { label: 'P2Y12 loading dose', pts: 6, eval: s => {
+        const t = s.at(['ticag_load', 'clop_load', 'pras_load']), b = s.p.reperfAt;
+        return { c: t == null ? 0 : (b == null || t <= b) ? 1 : 0.5, note: t == null ? 'Ticagrelor, prasugrel, or clopidogrel load before PCI.' : `Given at ${fmtRel(t)}` }; } },
+      { label: 'Anticoagulation for PCI', pts: 6, eval: s => {
+        const t = s.at(['heparin_drip', 'enox_tx']), b = s.p.reperfAt;
+        return { c: t == null ? 0 : (b == null || t <= b) ? 1 : 0.5, note: t == null ? 'Unfractionated heparin is standard during primary PCI.' : `Started at ${fmtRel(t)}` }; } },
+      { label: 'Primary PCI: door-to-balloon ≤ 90 min', pts: 18, eval: s => {
+        const c = s.p.cathAt;
+        if (c == null) return { c: 0, note: s.p.lysisAt != null ? 'Lysed instead of PCI at a PCI-capable hospital.' : 'Never reperfused.' };
+        const d2b = c + 45;
+        return { c: d2b <= 90 ? 1 : d2b <= 120 ? 0.5 : 0.25, note: `Door-to-balloon ${d2b} min` }; } },
+      { label: 'Immediate defibrillation for VF', pts: 10, eval: s => {
+        const vf = s.fired.vf;
+        if (vf == null) return { c: 1, note: '' };
+        const d = s.orders.find(o => o.id === 'defib' && o.at >= vf);
+        if (!d) return { c: 0, note: 'VF was never shocked.' };
+        const dt = d.at - vf;
+        return { c: dt <= 2 ? 1 : 0.5, note: `Shocked ${dt === 0 ? 'immediately' : dt + ' min after VF onset'}` }; } },
+      { label: 'Right-sided ECG for inferior STEMI', pts: 4, eval: s => {
+        const t = s.at('ecg_right');
+        return { c: t == null ? 0 : (s.p.reperfAt == null || t <= s.p.reperfAt) ? 1 : 0.5, note: t == null ? 'Inferior STEMI + JVD + clear lungs: check V4R for RV infarction.' : `Obtained at ${fmtRel(t)}` }; } },
+      { label: 'High-intensity statin', pts: 5, eval: s => {
+        const o = s.first('atorva');
+        if (!o) return { c: 0, note: 'Atorvastatin 40–80 mg.' };
+        return { c: +o.dose >= 40 ? 1 : 0.5, note: +o.dose >= 40 ? '' : 'Use 40–80 mg (high intensity) after ACS.' }; } },
+      { label: 'Oral beta-blocker within 24 h', pts: 4, eval: s => {
+        const t = s.at('metop_po');
+        return { c: t != null && t <= 1440 ? 1 : t != null ? 0.5 : 0, note: t == null ? 'Start oral metoprolol once he is stable.' : '' }; } },
+      { label: 'ACE inhibitor', pts: 3, eval: s => ({ c: s.at('lisinopril') != null ? 1 : 0, note: s.at('lisinopril') == null ? 'Indicated with hypertension (and for EF ≤ 40%, diabetes, or CKD).' : '' }) },
+      { label: 'Maintenance DAPT', pts: 4, eval: s => {
+        const a = s.on('asa'), b = s.onAny(['ticag', 'clop', 'pras']);
+        return { c: (a ? 0.5 : 0) + (b ? 0.5 : 0), note: [!a && 'no daily aspirin', !b && 'no maintenance P2Y12 inhibitor'].filter(Boolean).join(', ') }; } },
+      { label: 'CCU / ICU admission', pts: 5, eval: s => {
+        const t = s.locAt.ICU, r = s.p.reperfAt;
+        return { c: t == null ? 0 : (r == null || t <= r + 180) ? 1 : 0.5, note: t == null ? 'STEMI after VF arrest belongs in the CCU.' : `Transferred at ${fmtRel(t)}` }; } },
+      { label: 'Echocardiogram', pts: 3, eval: s => ({ c: s.at('echo') != null ? 1 : 0, note: s.at('echo') == null ? 'Assess LV/RV function and mechanical complications.' : '' }) },
+      { label: 'Smoking cessation', pts: 4, eval: s => ({ c: s.at(['c_smoke', 'nrt']) != null ? 1 : 0, note: '' }) },
+      { label: 'Cardiac rehab referral', pts: 3, eval: s => ({ c: s.at('rehab') != null ? 1 : 0, note: '' }) },
+      { label: 'Correct diagnosis', pts: 6, eval: s => dxEval(s) },
+    ],
+
+    pearls: [
+      '<b>ECG within 10 minutes</b> of arrival for chest pain.',
+      'STEMI: aspirin, P2Y12 load, heparin, and <b>primary PCI with door-to-balloon ≤ 90 min</b>. Lyse only if PCI is &gt; 120 min away.',
+      '<b>Inferior STEMI + hypotension/JVD + clear lungs = RV infarction.</b> Get V4R, <b>avoid nitrates</b> and diuretics, and give fluids.',
+      'VF: <b>shock first</b>. Every minute without defibrillation drops survival.',
+      'Discharge bundle: DAPT, high-intensity statin, beta-blocker, ACE inhibitor when indicated, smoking cessation, cardiac rehab.',
+    ],
+  };
+
+  // ── Case 3: Diabetic ketoacidosis ─────────────────────────────────
+  const DKA = {
+    id: 'dka',
+    who: '26-year-old man', where: 'Emergency Department', cc: 'Vomiting and "wiped out"',
+    dxName: 'Severe diabetic ketoacidosis precipitated by stopping insulin during gastroenteritis',
+    dx: { dka: 1, hhs: 0.2, aka: 0.2, gastro: 0.1 },
+    wt: 70, loc: 'ED', clock: 22 * 60 + 40, maxT: 48 * 60,
+    stem: `<p>Two days of vomiting, abdominal pain, and feeling "wiped out." He has had a stomach bug and stopped taking his insulin because he "wasn't eating."</p>
+           <p><b>PMH:</b> type 1 diabetes since age 12 on glargine and lispro. No other history. No known drug allergies. Weight 70 kg.</p>`,
+
+    init: () => ({ deficit: 6, glu: 612, k: 5.6, na0: 129, cl: 94, ag: 28, insMin: 0, insEver: false, gluAtDex: null, agAtDiet: null, agAtStop: null, bicarbBoost: 0, minK: 9, minGlu: 999 }),
+
+    tick(s) {
+      const p = s.p;
+      const drip = s.dose('insulin_drip') / 0.1;
+      const bolusT = s.lastAt('insulin_bolus');
+      const Edrip = drip + (bolusT != null && s.t - bolusT < 30 ? 1 : 0);
+      const g = s.at('glargine');
+      const basal = g != null && s.on('glargine') && s.t - g >= 120;
+      const eating = s.onAny(DIETS) && !s.on('npo');
+      const lispro = s.on('lispro') ? (eating ? 0.15 : 0.08) : 0;
+      const Ek = Edrip + (basal ? 0.35 : 0) + lispro;
+      if (Edrip > 0) p.insEver = true;
+
+      // Volume
+      p.deficit = Math.max(0, p.deficit - s.fluidIn / 1000 + (p.glu > 250 ? 0.0012 : 0.0002));
+
+      // Glucose
+      let dG = -s.fluidIn / 1000 * 35;
+      if (p.glu > 200) dG -= p.deficit < 3 ? 0.12 : 0.06;
+      dG -= 1.1 * Math.min(Edrip, 12);
+      dG += s.dexRate / 150 * 0.6;
+      if (Ek < 0.2) dG += 0.15;
+      if (!Edrip && basal) dG += (165 - p.glu) * 0.004;
+      if (eating) dG += 0.08;
+      dG -= lispro * 0.8;
+      const d50 = s.lastAt('d50');
+      if (d50 != null && s.t - d50 < 5) dG += 20;
+      p.glu = Math.max(18, p.glu + dG);
+
+      // Ketoacids (anion gap)
+      if (Ek >= 0.25) p.ag -= 0.025 * Math.min(1, Math.sqrt(Ek)) * (p.deficit > 4.5 ? 0.7 : 1);
+      else p.ag += p.insEver ? 0.012 : 0.006;
+      p.ag = clamp(p.ag, 10, 34);
+
+      // Potassium: insulin shifts it in (tapering as stores refill), fluids dilute, osmotic diuresis wastes it
+      const shift = 0.016 * Math.min(Edrip, 8) * Math.max(0, p.k - 2.4) / 3.2 * Math.exp(-p.insMin / 350);
+      if (Edrip > 0) p.insMin += Math.min(Edrip, 1);
+      p.k += -shift - s.fluidIn / 1000 * 0.1 - (p.glu > 250 && p.deficit < 4.5 ? 0.0008 : 0) + s.kIn * 0.018;
+      if (!Edrip && p.insEver) p.k += (4.0 - p.k) * 0.002; // eating, off the drip: stores recover
+      const kpo = s.lastAt('kcl_po');
+      if (kpo != null && s.t - kpo < 120) p.k += 40 / 120 * 0.008;
+      p.k = clamp(p.k, 1.6, 7.5);
+
+      // Chloride rises with saline (non-gap acidosis as the gap closes)
+      p.cl = Math.min(112, p.cl + s.clIn / 1000 * 2.0);
+      p.bicarbBoost = Math.max(0, p.bicarbBoost - 0.02);
+      p.minK = Math.min(p.minK, p.k);
+      p.minGlu = Math.min(p.minGlu, p.glu);
+    },
+
+    vitals(s) {
+      const p = s.p, l = dkaLabs(s);
+      const hypo = p.glu < 70 ? 18 : 0;
+      return {
+        hr: Math.round(82 + p.deficit * 5.5 + (p.ag - 12) * 0.2 + hypo),
+        sbp: Math.round(130 - p.deficit * 5.3), dbp: Math.round(78 - p.deficit * 3),
+        rr: Math.round(14 + Math.max(0, 7.35 - l.ph) * 55), spo2: 99, temp: 37.3,
+        rhythm: p.k < 3.0 ? 'Sinus rhythm · frequent PVCs' : p.k > 6.2 ? 'Sinus rhythm · peaked T waves' : (82 + p.deficit * 5.5 > 100 ? 'Sinus tachycardia' : 'Sinus rhythm'),
+      };
+    },
+
+    results: {
+      bmp: s => dkaChem(s, false),
+      cmp: s => dkaChem(s, true),
+      vbg: s => { const l = dkaLabs(s); return [R('pH', l.ph.toFixed(2), l.ph < 7.35 ? 'L' : ''), R('pCO₂', String(Math.round(l.pco2)), l.pco2 < 35 ? 'L' : ''), R('HCO₃', String(Math.round(l.hco3)), l.hco3 < 22 ? 'L' : '')]; },
+      abg: s => { const l = dkaLabs(s); return [R('pH', (l.ph + 0.03).toFixed(2), l.ph < 7.32 ? 'L' : ''), R('pCO₂', String(Math.round(l.pco2 - 5)), 'L'), R('pO₂', '98')]; },
+      bhb: s => { const v = Math.max(0.1, (s.p.ag - 11) * 0.38); return [R('β-hydroxybutyrate', v.toFixed(1) + ' mmol/L', v > 0.6 ? 'H' : '')]; },
+      fsg: s => [R('Glucose', String(Math.round(s.p.glu)), s.p.glu > 180 ? 'H' : s.p.glu < 70 ? 'L' : '')],
+      osm: s => { const l = dkaLabs(s); const o = Math.round(2 * l.na + s.p.glu / 18 + l.bun / 2.8); return [R('Osmolality', o + ' mOsm/kg', o > 295 ? 'H' : '')]; },
+      phos: s => [R('Phosphate', (1.5 + 1.0 * (s.p.ag - 10) / 18).toFixed(1) + ' mg/dL', 'L')],
+      mg: () => [R('Magnesium', '1.8 mg/dL')],
+      cbc: s => [R('WBC', (9 + 7 * (s.p.ag - 10) / 18).toFixed(1) + ' K/µL', s.p.ag > 18 ? 'H' : ''), R('Hemoglobin', (13.8 + s.p.deficit * 0.35).toFixed(1) + ' g/dL', s.p.deficit > 3 ? 'H' : ''), R('Platelets', '310 K/µL')],
+      ua: s => s.p.ag > 14 ? 'Specific gravity 1.032. <b>Glucose 3+, ketones 3+.</b> No leukocyte esterase or nitrites.' : 'Glucose 1+, ketones trace. Otherwise negative.',
+      lipase: () => [R('Lipase', '74 U/L', 'H')],
+      ecg: s => s.p.k > 6.2 ? `Sinus tachycardia at ${s.vit.hr}. <b>Peaked T waves.</b>`
+        : s.p.k < 3.3 ? `Sinus rhythm at ${s.vit.hr}. <b>Flattened T waves, prominent U waves</b>, frequent PVCs.`
+        : `Sinus ${s.vit.hr > 100 ? 'tachycardia' : 'rhythm'} at ${s.vit.hr}. No peaked T waves. No ischemic changes.`,
+      trop: () => [R('hs-Troponin I', '9 ng/L')],
+      a1c: () => [R('HbA1c', '9.4%', 'H')],
+      cxr: () => 'Clear lungs. No infiltrate.',
+      ct_abd: () => 'No acute abdominal process. Mild nonspecific small-bowel fluid.',
+      ct_head: () => 'No acute intracranial abnormality.',
+    },
+
+    exam: {
+      general: s => dkaLabs(s).ph < 7.15 ? 'Ill-appearing and drowsy, but answers questions appropriately.' : s.p.glu < 70 ? 'Diaphoretic and tremulous.' : 'Tired but alert.',
+      heent: s => (s.p.deficit > 2.5 ? 'Dry mucous membranes. ' : 'Mucous membranes moist. ') + (s.p.ag > 16 ? 'Fruity odor on breath.' : ''),
+      cv: s => `${s.vit.hr > 100 ? 'Tachycardic' : 'Regular rate'}, regular. No murmurs.`,
+      lungs: s => dkaLabs(s).ph < 7.25 ? 'Clear. <b>Deep, rapid (Kussmaul) respirations.</b>' : 'Clear. Normal work of breathing.',
+      abd: s => s.p.ag > 16 ? 'Diffuse mild tenderness. No rebound or guarding. Hypoactive bowel sounds.' : 'Soft, nontender.',
+      ext: s => s.p.deficit > 3 ? 'Cool. Capillary refill 3 seconds.' : 'Warm and well perfused.',
+      neuro: s => dkaLabs(s).ph < 7.15 ? 'Drowsy but oriented ×3. Nonfocal.' : 'Alert and oriented. Nonfocal.',
+      skin: s => s.p.deficit > 3 ? 'Poor turgor.' : 'Normal turgor.',
+    },
+
+    hx: s => s.p.ag > 14
+      ? 'Vomiting everything for two days. "No food, so no insulin." Denies fever, cough, dysuria, chest pain, alcohol, or drugs. Diffuse belly ache.'
+      : '"I feel way better." Nausea is gone and he is hungry.',
+
+    onOrder(s, o) {
+      const p = s.p;
+      if (DEX_FLUIDS.includes(o.id) && p.gluAtDex == null) p.gluAtDex = p.glu;
+      if (DIETS.includes(o.id) && p.agAtDiet == null) p.agAtDiet = p.ag;
+      if (o.id === 'bicarb') p.bicarbBoost = 4;
+      if (o.id === 'con_endo') return 'Endocrinology: "Agree with the DKA protocol. When the gap closes and he\'s eating, give basal insulin and overlap with the drip for 1–2 hours."';
+      if (o.id === 'con_sw') return 'Social work met with him. Insurance and pharmacy access are fine.';
+      return null;
+    },
+
+    onStop(s, o) {
+      if (o.id === 'insulin_drip' && !o.replaced) {
+        s.p.agAtStop = s.p.ag;
+        if (s.p.ag > 14) addHarm(s, { label: 'Insulin infusion stopped before DKA resolved', pts: 10,
+          why: 'Keep the drip running (add dextrose as glucose falls) until the anion gap closes. Stopping early restarts ketogenesis.' });
+      }
+    },
+
+    onMove(s, loc) {
+      if (loc === 'Home' && (s.p.ag > 12 || s.on('insulin_drip')))
+        addHarm(s, { label: 'Unsafe discharge', why: 'He was discharged before the DKA had resolved and he was on SC insulin.', pts: 20 });
+    },
+
+    events: [
+      { id: 'hypok', when: s => s.p.insEver && s.p.k < 3.3, sev: 'bad',
+        text: s => `Telemetry alarm: frequent PVCs. Potassium is now about ${s.p.k.toFixed(1)}.`,
+        harm: { label: 'Potassium fell below 3.3 on insulin', why: 'Insulin drives K into cells. Add 20–30 mEq KCl per liter once K < 5.2, and check a BMP every 2–4 h.', pts: 8 } },
+      { id: 'hypok2', when: s => s.p.k < 2.7, sev: 'bad',
+        text: 'Runs of nonsustained VT. He says his legs feel weak.',
+        harm: { label: 'Severe hypokalemia (< 2.7)', why: 'Life-threatening arrhythmias and respiratory muscle weakness.', pts: 6 } },
+      { id: 'hyperk', when: s => s.p.k > 6.2, sev: 'bad', text: 'Telemetry: peaked T waves.',
+        harm: { label: 'Hyperkalemia from potassium replacement', why: 'Hold potassium when K > 5.2.', pts: 5 } },
+      { id: 'hypo', when: s => s.p.glu < 70, sev: 'bad',
+        text: s => `Nurse: "He's sweaty and shaky. Fingerstick is ${Math.round(s.p.glu)}."`,
+        harm: { label: 'Hypoglycemia', why: 'Add dextrose (D5 ½NS) when glucose falls to about 200–250 and lower the insulin rate. Check glucose hourly.', pts: 8 } },
+      { id: 'hypo_sz', when: s => s.p.glu < 40, sev: 'bad',
+        text: 'He has a generalized seizure. The nurse gives D50 per protocol.',
+        fire: s => { s.p.glu += 120; },
+        harm: { label: 'Severe hypoglycemia with seizure', why: 'See above. Hourly glucose checks would have caught it.', pts: 8 } },
+      { id: 'no_insulin', when: s => s.t >= 360 && !s.p.insEver, sev: 'bad', text: 'He is more lethargic and his breathing is deeper and faster.' },
+      { id: 'rebound', when: s => s.p.insEver && s.p.ag > 18 && !s.on('insulin_drip') && s.p.agAtStop != null, sev: 'bad',
+        text: 'Nurse: "He\'s vomiting again and breathing fast."' },
+      { id: 'hungry', when: s => s.p.ag <= 13 && s.p.glu < 250, sev: 'info',
+        text: 'He says he feels much better and is starving.' },
+    ],
+
+    harms: [
+      { ids: ['bicarb'], when: s => dkaLabs(s).ph >= 6.9, label: 'Bicarbonate for pH ≥ 6.9', pts: 6,
+        why: 'No benefit above pH 6.9–7.0. It worsens hypokalemia and can slow ketone clearance.' },
+      { ids: ['insulin_drip'], when: (s, o) => +o.dose >= 0.5, label: 'Insulin infusion overdose', pts: 8,
+        why: 'The standard rate is 0.1 units/kg/h (or 0.14 without a bolus). Higher rates cause hypoglycemia and a potassium crash.' },
+      { ids: ['kcl_fluids', 'kcl_iv', 'kcl_po'], when: s => s.p.k > 5.2, label: 'Potassium given with K > 5.2', pts: 3,
+        why: 'Hold potassium while K > 5.2 and recheck every 2 h.' },
+      { ids: ['insulin_drip', 'insulin_bolus'], when: s => s.p.k < 3.3, label: 'Insulin started with K < 3.3', pts: 8,
+        why: 'Replete potassium first, then start insulin.' },
+      { ids: ['furosemide'], label: 'Diuretic in a volume-depleted patient', pts: 5, why: 'He is about 6 L down.' },
+      { ids: ['d50'], when: s => s.p.glu > 100, label: 'D50 without hypoglycemia', pts: 3, why: 'Use a dextrose infusion to keep glucose up while insulin runs.' },
+    ],
+
+    ok: ['bmp', 'cmp', 'vbg', 'abg', 'bhb', 'fsg_q1h', 'osm', 'phos', 'mg', 'cbc', 'ua', 'lipase', 'ecg', 'trop', 'a1c', 'cxr', 'ns_bolus', 'lr_bolus',
+         'ns_inf', 'lr_inf', 'half_ns', 'd5_half', 'd5w', 'kcl_fluids', 'kcl_iv', 'kcl_po', 'kphos', 'mg_iv', 'insulin_drip', 'insulin_bolus',
+         'glargine', 'lispro', 'diet_dm', 'diet_reg', 'c_dm', 'con_endo', 'enox_ppx', 'hep_sc', 'd50'],
+
+    score: [
+      { label: 'Initial labs: BMP, blood gas, ketones', pts: 6, eval: s => {
+        const a = s.at(['bmp', 'cmp']), b = s.at(['vbg', 'abg']), c = s.at('bhb');
+        const n = [a, b, c].filter(t => t != null && t <= 60).length;
+        return { c: n / 3, note: [a == null && 'no BMP', b == null && 'no blood gas', c == null && 'no β-hydroxybutyrate'].filter(Boolean).join(', ') }; } },
+      { label: 'Isotonic fluid bolus within 30 min', pts: 10, eval: s => {
+        const t = s.at(ISO_BOLUS);
+        return { c: t == null ? 0 : t <= 30 ? 1 : t <= 60 ? 0.6 : t <= 120 ? 0.3 : 0.1, note: t == null ? 'No isotonic bolus. He was about 6 L down.' : `Started at ${fmtRel(t)}` }; } },
+      { label: 'Potassium known before starting insulin', pts: 8, eval: s => {
+        const ins = s.at(['insulin_drip', 'insulin_bolus']);
+        if (ins == null) return { c: 0, note: 'Insulin was never started.' };
+        const k = s.results.find(r => (r.id === 'bmp' || r.id === 'cmp') && r.readyAt <= ins);
+        if (k) return { c: 1, note: '' };
+        const pend = s.results.find(r => (r.id === 'bmp' || r.id === 'cmp') && r.at <= ins);
+        return { c: pend ? 0.3 : 0, note: 'Insulin was started before the potassium came back.' }; } },
+      { label: 'IV insulin infusion at the right rate', pts: 14, eval: s => {
+        const o = s.first('insulin_drip');
+        if (!o) return { c: 0, note: s.at('glargine') != null || s.at('lispro') != null ? 'Severe DKA (pH < 7.0) needs an IV insulin infusion.' : 'No insulin infusion.' };
+        const d = +o.dose;
+        const dc = d === 0.1 || d === 0.14 ? 1 : d === 0.05 ? 0.5 : d === 0.02 ? 0.25 : 0;
+        const tc = o.at <= 180 ? 1 : o.at <= 360 ? 0.7 : 0.4;
+        return { c: dc * tc, note: `Started at ${fmtRel(o.at)} at ${d} units/kg/h${dc < 1 ? ' (standard: 0.1, or 0.14 without a bolus)' : ''}` }; } },
+      { label: 'Potassium replaced, kept ≥ 3.3', pts: 10, eval: s => {
+        const given = s.at(['kcl_fluids', 'kcl_iv', 'kcl_po']);
+        if (s.fired.hypok != null) return { c: 0, note: `Nadir K ${s.p.minK.toFixed(1)}` };
+        return { c: given != null ? 1 : 0.5, note: given != null ? `Nadir K ${s.p.minK.toFixed(1)}` : 'K never dropped below 3.3, but no replacement was ordered.' }; } },
+      { label: 'Dextrose added as glucose fell', pts: 10, eval: s => {
+        const g = s.p.gluAtDex;
+        if (g == null) return { c: 0, note: s.fired.hypo != null ? 'Glucose fell into hypoglycemia without dextrose.' : 'No dextrose-containing fluid.' };
+        let c = g <= 300 ? 1 : 0.6;
+        if (s.fired.hypo != null) c = 0.4;
+        return { c, note: `Started at glucose ${Math.round(g)}${g > 300 ? ' (early: add it at ~200–250)' : ''}${s.fired.hypo != null ? ', but he still got hypoglycemic' : ''}` }; } },
+      { label: 'Hourly glucose checks', pts: 4, eval: s => ({ c: timely(s.at('fsg_q1h'), 180, 480), note: s.at('fsg_q1h') == null ? 'Check glucose every hour on an insulin drip.' : '' }) },
+      { label: 'Electrolytes every 2–4 h', pts: 6, eval: s => {
+        const n = s.count(['bmp', 'cmp'], 960);
+        return { c: n >= 4 ? 1 : n === 3 ? 0.7 : n === 2 ? 0.4 : 0, note: `${n} BMP/CMP${n === 1 ? '' : 's'} in the first 16 h` }; } },
+      { label: 'ICU admission', pts: 6, eval: s => { const t = s.locAt.ICU; return { c: t == null ? 0 : t <= 240 ? 1 : 0.5, note: t == null ? 'Severe DKA on an insulin drip belongs in the ICU.' : `Transferred at ${fmtRel(t)}` }; } },
+      { label: 'Basal insulin 1–2 h before stopping the drip', pts: 12, eval: s => {
+        const g = s.at('glargine');
+        const stop = s.orders.find(o => o.id === 'insulin_drip' && o.stoppedAt != null && !o.replaced);
+        if (!stop) return { c: 0, note: s.on('insulin_drip') ? 'Still on the drip. Never transitioned to SC insulin.' : 'Never transitioned.' };
+        if (s.p.agAtStop > 14) return { c: 0, note: 'The drip was stopped before the gap closed.' };
+        if (g == null || g > stop.stoppedAt) return { c: 0, note: 'Basal insulin wasn\'t given before the drip stopped, which risks rebound DKA.' };
+        const gap = stop.stoppedAt - g;
+        return { c: gap >= 60 ? 1 : 0.5, note: `Glargine ${gap} min before stopping the drip${gap < 60 ? ' (overlap at least 1–2 h)' : ''}` }; } },
+      { label: 'Diet restarted after the gap closed', pts: 3, eval: s => {
+        const a = s.p.agAtDiet;
+        return { c: a == null ? 0 : a <= 14 ? 1 : 0.3, note: a == null ? 'Let him eat once the DKA resolves.' : a > 14 ? 'Diet started while still acidotic and nauseated.' : '' }; } },
+      { label: 'Diabetes education: sick-day rules', pts: 4, eval: s => ({ c: s.at('c_dm') != null ? 1 : 0, note: s.at('c_dm') == null ? 'The precipitant was stopping insulin when he couldn\'t eat. Teach sick-day rules.' : '' }) },
+      { label: 'Correct diagnosis', pts: 8, eval: s => dxEval(s) },
+    ],
+
+    pearls: [
+      'Fluids first: <b>1–1.5 L isotonic crystalloid in the first hour</b>.',
+      '<b>Check K before insulin.</b> K &lt; 3.3: hold insulin and replete. 3.3–5.2: add 20–30 mEq/L. &gt; 5.2: no K, recheck every 2 h.',
+      'Insulin infusion at 0.1 units/kg/h (or 0.14 without a bolus). BMP every 2–4 h, glucose hourly.',
+      'At glucose ~200–250: <b>add D5 ½NS and lower the insulin rate</b>, but keep it running until the gap closes.',
+      'Transition when the gap is closed and he\'s eating: <b>SC basal insulin, then stop the drip 1–2 h later</b>.',
+      'Rising chloride with saline can leave a non-gap acidosis. Follow the anion gap, not just the bicarbonate.',
+    ],
+  };
+
+  function dkaLabs(s) {
+    const p = s.p;
+    const na = p.na0 + (612 - p.glu) * 0.016;
+    const hco3 = Math.max(3, na - p.cl - p.ag + p.bicarbBoost);
+    const pco2 = Math.min(46, 1.5 * hco3 + 13);
+    const ph = 6.1 + Math.log10(hco3 / (0.03 * pco2));
+    const bun = 12 + 22 * p.deficit / 6;
+    const cr = 0.9 + 0.7 * p.deficit / 6;
+    return { na, hco3, pco2, ph, bun, cr };
+  }
+  function dkaChem(s, full) {
+    const p = s.p, l = dkaLabs(s);
+    const na = Math.round(l.na), cl = Math.round(p.cl), hco3 = Math.round(l.hco3), ag = na - cl - hco3;
+    const k = Math.round(p.k * 10) / 10;
+    const rows = [R('Na', String(na), na < 135 ? 'L' : na > 145 ? 'H' : ''), R('K', k.toFixed(1), k < 3.5 ? 'L' : k > 5.0 ? 'H' : ''),
+      R('Cl', String(cl), cl > 107 ? 'H' : cl < 98 ? 'L' : ''), R('HCO₃', String(hco3), hco3 < 22 ? 'L' : ''),
+      R('BUN', String(Math.round(l.bun)), l.bun > 20 ? 'H' : ''), R('Creatinine', l.cr.toFixed(1), l.cr > 1.2 ? 'H' : ''),
+      R('Glucose', String(Math.round(p.glu)), p.glu > 140 ? 'H' : p.glu < 70 ? 'L' : ''), R('Anion gap', String(ag), ag > 12 ? 'H' : '')];
+    if (full) rows.push(R('AST', '28'), R('ALT', '31'), R('Alk phos', '96'), R('Total bilirubin', '0.7'), R('Albumin', '4.4'));
+    return rows;
+  }
+
+  function dxEval(s) {
+    const c = (s.cs.dx[s.dx] || 0);
+    return { c, note: s.dx ? `You said: ${DX_NAME[s.dx] || s.dx}` : 'No diagnosis entered.' };
+  }
+
+  const CASES = [SEPSIS, STEMI, DKA];
+  const CASE_BY_ID = Object.fromEntries(CASES.map(c => [c.id, c]));
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRADING
+  // ═══════════════════════════════════════════════════════════════
+
+  function grade(s) {
+    const cs = s.cs;
+    const crit = cs.score.map(k => { const r = k.eval(s); return { label: k.label, pts: k.pts, c: clamp(r.c, 0, 1), note: r.note || '' }; });
+    const possible = crit.reduce((a, k) => a + k.pts, 0);
+    const earned = crit.reduce((a, k) => a + k.pts * k.c, 0);
+    const okSet = new Set([...cs.ok, ...ALWAYS_OK]);
+    const extras = [];
+    for (const o of s.orders) {
+      if (okSet.has(o.id) || extras.includes(o.id)) continue;
+      // Orders already penalized as harmful aren't double-counted as unnecessary
+      if (cs.harms.some(h => h.ids.includes(o.id) && s.harms.some(x => x.label === h.label))) continue;
+      extras.push(o.id);
+    }
+    const harmPts = s.harms.reduce((a, h) => a + h.pts, 0);
+    const extraPts = Math.min(10, extras.length * 2);
+    let score = Math.round(100 * earned / possible - harmPts - extraPts);
+    if (s.dead) score = Math.min(score, 15);
+    score = clamp(score, 0, 100);
+    return { score, crit, extras, harmPts, extraPts };
+  }
+
+  const GRADES = [
+    [95, 'Attending-level management'],
+    [85, 'Strong senior resident'],
+    [70, 'Solid intern'],
+    [50, 'Needs a little supervision'],
+    [30, 'Call your senior'],
+    [0,  'The patient would like a second opinion'],
+  ];
+  const gradeFor = n => GRADES.find(([m]) => n >= m)[1];
+  const critSq = c => c >= 0.99 ? '🟩' : c > 0 ? '🟨' : '⬜';
+
+  // ═══════════════════════════════════════════════════════════════
+  // DAILY SELECTION
+  // ═══════════════════════════════════════════════════════════════
+
+  function getDayIndex() {
+    const n = new Date();
+    return Math.max(0, Math.floor((Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()) - LAUNCH_UTC) / 86400000));
+  }
+  const caseForDay = d => CASES[d % CASES.length];
+
+  // ═══════════════════════════════════════════════════════════════
+  // STORAGE
+  // ═══════════════════════════════════════════════════════════════
+
+  const STORE_KEY   = 'orders_v1';
+  const VISITED_KEY = 'orders_visited';
+  const progressKey = d => `orders_progress_${d}`;
+  const postedKey   = d => `orders_posted_${d}`;
+
+  function lsGet(k, fallback) {
+    try { const v = localStorage.getItem(k); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
+  }
+  function lsSet(k, v) {
+    if (TEST_MODE) return;
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+  }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch {} }
+  function loadHistory() { return lsGet(STORE_KEY, []); }
+  function saveResult(entry) {
+    const h = loadHistory();
+    const i = h.findIndex(e => e.dayIndex === entry.dayIndex);
+    if (i >= 0) h[i] = entry; else h.unshift(entry);
+    lsSet(STORE_KEY, h.slice(0, 365));
+  }
+  function computeDayStreak(dayIndex) {
+    const days = new Set(loadHistory().map(e => e.dayIndex));
+    let n = 0;
+    for (let d = dayIndex; days.has(d); d--) n++;
+    return n;
+  }
+
+  // Export for the headless test harness
+  if (typeof window === 'undefined') {
+    globalThis.__ORDERS = { CASES, CATALOG, ITEM, newSim, apply, replay, grade, tick, advance, placeOrder, dkaLabs, isActive };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // UI
+  // ═══════════════════════════════════════════════════════════════
+
+  const $ = id => document.getElementById(id);
+  function setState(st) { document.body.setAttribute('data-state', st); }
+  function showToast(msg, ms = 1600) {
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => t.classList.remove('show'), ms);
+  }
+  function openModal(id)  { $(id).classList.add('open'); }
+  function closeModal(id) { $(id).classList.remove('open'); }
+  function esc(str) { return String(str).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  let game = null;   // { cs, dayIndex, puzzleNum, practice }
+  let sim = null;
+  let rendered = 0;  // feed entries already in the DOM
+
+  function act(a) {
+    if (!sim || sim.ended) return;
+    apply(sim, a);
+    if (!game.practice) lsSet(progressKey(game.dayIndex), { caseId: game.cs.id, log: sim.log });
+    if (sim.ended) return;
+    renderCase();
+    if (sim.dead) setTimeout(() => openEnd('dead'), 300);
+    else if (sim.timeUp && a.a === 'adv') setTimeout(() => openEnd('time'), 300);
+  }
+
+  function renderOut(out) {
+    if (Array.isArray(out)) return `<div class="labs">${out.map(([k, v, f]) => `<div><span class="k">${k}</span><span class="v ${f || ''}">${v}</span></div>`).join('')}</div>`;
+    return `<p>${out}</p>`;
+  }
+
+  function renderEntry(e) {
+    const tm = `<span class="tm">${fmtClock(sim, e.t, true)}</span>`;
+    const d = document.createElement('div');
+    switch (e.k) {
+      case 'note':
+        d.className = 'f-card';
+        d.innerHTML = `<div class="f-hd"><span>${e.title || 'Note'}</span>${tm}</div>${e.h}`;
+        break;
+      case 'result':
+        d.className = 'f-card result';
+        d.innerHTML = `<div class="r-hd"><b>${esc(e.title)}</b><span class="tm">${ITEM[e.rid].kind === 'lab' ? 'drawn' : 'ordered'} ${fmtClock(sim, e.drawn, true)} · resulted ${fmtClock(sim, e.t, true)}</span></div>${renderOut(e.h)}`;
+        break;
+      case 'event':
+        d.className = `f-card event ${e.sev || ''}`;
+        d.innerHTML = `<div class="f-hd"><span>${e.sev === 'info' ? 'Update' : e.sev === 'bad' ? 'Alert' : 'Nurse call'}</span>${tm}</div><p>${e.h}</p>`;
+        break;
+      case 'exam':
+        d.className = 'f-card';
+        d.innerHTML = `<div class="f-hd"><span>${e.title}</span>${tm}</div>${e.h}`;
+        break;
+      case 'adv':
+        d.className = 'f-adv';
+        d.textContent = e.h;
+        break;
+      default:
+        d.className = `f-line ${e.k}`;
+        d.innerHTML = `${tm}<span>${e.h}</span>`;
+    }
+    return d;
+  }
+
+  function renderFeed(full) {
+    const feed = $('feed');
+    if (full) { feed.innerHTML = ''; rendered = 0; }
+    for (; rendered < sim.feed.length; rendered++) {
+      const e = sim.feed[rendered];
+      if (e.k === 'adv' && !e.h) continue;
+      feed.appendChild(renderEntry(e));
+    }
+  }
+
+  function renderMonitor() {
+    const v = sim.vit;
+    const dash = x => x == null ? '--' : x;
+    $('monitor').classList.toggle('alarm', !!v.alarm || (v.sbp != null && v.sbp < 80) || (v.spo2 != null && v.spo2 < 85));
+    $('monitor').innerHTML = `
+      <div class="vital hr"><div class="lbl">HR</div><div class="val">${dash(v.hr)}</div></div>
+      <div class="vital bp"><div class="lbl">BP</div><div class="val">${v.sbp == null ? '--/--' : v.sbp + '/' + v.dbp}</div></div>
+      <div class="vital rr"><div class="lbl">RR</div><div class="val">${dash(v.rr)}</div></div>
+      <div class="vital sp"><div class="lbl">SpO₂</div><div class="val">${v.spo2 == null ? '--' : v.spo2 + '%'}</div></div>
+      <div class="vital tmp"><div class="lbl">TEMP</div><div class="val">${v.temp.toFixed(1)}°</div></div>
+      <div class="rhythm">${v.rhythm || ''}</div>`;
+  }
+
+  function renderCase(full, noScroll) {
+    $('bn-who').textContent = game.cs.who;
+    $('bn-loc').textContent = (sim.cs.locLabel && sim.cs.locLabel(sim)) || LOC_NAME[sim.loc];
+    $('bn-clock').textContent = fmtClock(sim, sim.t);
+    renderMonitor();
+    renderFeed(full);
+    const pend = sim.results.filter(r => !r.shown).length;
+    $('pending-badge').style.display = pend ? '' : 'none';
+    $('pending-badge').textContent = pend;
+    if (!noScroll) requestAnimationFrame(() => scrollTo({ top: document.body.scrollHeight, behavior: full ? 'auto' : 'smooth' }));
+  }
+
+  // ── Typeahead ──
+  let taItems = [], taIdx = 0;
+  function searchCatalog(q) {
+    q = q.trim().toLowerCase();
+    if (!q) return [];
+    const toks = q.split(/\s+/);
+    const out = [];
+    for (const it of CATALOG) {
+      const name = it.name.toLowerCase();
+      const hay = name + ' ' + (it.syn || '');
+      const words = hay.split(/[^a-z0-9.%/½β-]+/).filter(Boolean);
+      const prefixHit = tk => words.some(w => w.startsWith(tk));
+      if (!toks.every(tk => prefixHit(tk) || (tk.length >= 4 && hay.includes(tk)))) continue;
+      const nameWords = name.split(/[^a-z0-9.%/½β-]+/).filter(Boolean);
+      const rank = name.startsWith(q) ? 0
+        : nameWords.some(w => w.startsWith(toks[0])) ? 1
+        : toks.every(prefixHit) ? 2 : 3;
+      out.push([rank, it]);
+    }
+    // Loading doses sort ahead of their maintenance versions
+    return out.sort((a, b) => a[0] - b[0] || (a[1].pri || 0) - (b[1].pri || 0) || a[1].name.length - b[1].name.length).slice(0, 8).map(r => r[1]);
+  }
+  function renderTA() {
+    const list = $('ta-list');
+    const q = $('order-input').value;
+    if (!q.trim()) { list.classList.remove('open'); return; }
+    taItems = searchCatalog(q);
+    taIdx = 0;
+    list.innerHTML = taItems.length
+      ? taItems.map((it, i) => `<div class="ta-item ${i === 0 ? 'hl' : ''}" data-i="${i}"><span class="ic">${KIND[it.kind].ic}</span>
+          <span class="nm">${esc(it.name)}${sim.on(it.id) ? ' <span class="dim">(active)</span>' : ''}</span><span class="kd">${KIND[it.kind].label}</span></div>`).join('')
+      : '<div class="ta-empty">No matching orders. Try another name (generic or brand).</div>';
+    list.classList.add('open');
+    list.querySelectorAll('.ta-item').forEach(el => {
+      el.onmousedown = e => { e.preventDefault(); pickItem(taItems[+el.dataset.i]); };
+    });
+  }
+  function hlTA() { $('ta-list').querySelectorAll('.ta-item').forEach((el, i) => el.classList.toggle('hl', i === taIdx)); }
+  function pickItem(it) {
+    $('order-input').value = '';
+    $('ta-list').classList.remove('open');
+    if (it.doses) openDose(it);
+    else { act({ a: 'o', id: it.id }); showToast(`Ordered: ${it.name}`, 1400); }
+  }
+
+  function openDose(it) {
+    $('dose-title').textContent = it.name;
+    const cur = sim.on(it.id);
+    $('dose-note').textContent = cur ? `Currently: ${doseLabel(sim, it, cur.dose)}. Choosing a new dose replaces it.` : 'Choose a dose.';
+    $('dose-list').innerHTML = it.doses.map(([v]) => `<button class="choice ${cur && String(cur.dose) === String(v) ? 'cur' : ''}" data-v="${v}">${doseLabel(sim, it, v)}</button>`).join('');
+    $('dose-list').querySelectorAll('.choice').forEach(b => b.onclick = () => {
+      const v = isNaN(+b.dataset.v) ? b.dataset.v : +b.dataset.v;
+      closeModal('sheet-dose');
+      act({ a: 'o', id: it.id, d: v });
+      showToast(`Ordered: ${it.name}`, 1400);
+    });
+    openModal('sheet-dose');
+  }
+
+  function openClock() {
+    const nr = nextResultIn(sim);
+    const opts = [];
+    if (nr != null) opts.push([nr, true, `Until next result`, `${fmtDur(nr)}`]);
+    opts.push([15, false, '15 minutes', ''], [60, false, '1 hour', ''], [240, false, '4 hours', '']);
+    const abs = sim.cs.clock + sim.t;
+    const toMorning = ((Math.floor(abs / 1440) + (abs % 1440 >= 8 * 60 ? 1 : 0)) * 1440 + 8 * 60) - abs;
+    opts.push([toMorning, false, 'Next morning (08:00)', fmtDur(toMorning)]);
+    $('clock-list').innerHTML = opts.map(([m, r, l, sub], i) => `<button class="choice" data-i="${i}">${l}<small>${sub}</small></button>`).join('');
+    $('clock-list').querySelectorAll('.choice').forEach(b => b.onclick = () => {
+      const [m, r] = opts[+b.dataset.i];
+      closeModal('sheet-clock');
+      act({ a: 'adv', m, r });
+    });
+    openModal('sheet-clock');
+  }
+
+  function openExam() {
+    $('exam-list').innerHTML = EXAM_SECS.map(([k, l]) => `<label class="chk"><input type="checkbox" value="${k}">${l}</label>`).join('');
+    openModal('sheet-exam');
+  }
+
+  function openActive() {
+    const running = sim.orders.filter(o => isActive(sim, o));
+    const pend = sim.results.filter(r => !r.shown);
+    let h = '';
+    h += `<div class="eyebrow" style="margin-top:4px">Active (${running.length})</div>`;
+    h += running.length ? running.map(o => {
+      const it = ITEM[o.id];
+      const sub = it.fluid === 'bolus' ? `infusing until ${fmtClock(sim, o.at + runMin(sim, o), true)}` : it.run ? `running until ${fmtClock(sim, o.at + it.run, true)}` : `since ${fmtClock(sim, o.at, true)}`;
+      return `<div class="act-row"><span>${KIND[it.kind].ic}</span><div class="nm">${esc(it.name)}${o.dose != null ? ' · ' + doseLabel(sim, it, o.dose) : ''}<small>${sub}</small></div>
+        ${it.doses && it.cont ? `<button class="mini-btn" data-chg="${o.id}">Change</button>` : ''}<button class="mini-btn stop" data-stop="${o.u}">Stop</button></div>`;
+    }).join('') : '<p class="sheet-note">Nothing running.</p>';
+    h += `<div class="eyebrow" style="margin-top:16px">Pending results (${pend.length})</div>`;
+    h += pend.length ? pend.map(r => `<div class="act-row"><span>${KIND[ITEM[r.id].kind].ic}</span><div class="nm">${esc(ITEM[r.id].name)}<small>ready ~${fmtClock(sim, r.readyAt, true)}</small></div></div>`).join('')
+      : '<p class="sheet-note">None.</p>';
+    $('active-list').innerHTML = h;
+    $('active-list').querySelectorAll('[data-stop]').forEach(b => b.onclick = () => { act({ a: 'x', u: +b.dataset.stop }); openActive(); });
+    $('active-list').querySelectorAll('[data-chg]').forEach(b => b.onclick = () => { closeModal('sheet-active'); openDose(ITEM[b.dataset.chg]); });
+    openModal('sheet-active');
+  }
+
+  function openMove() {
+    const locs = [['ED', 'Emergency Department'], ['Ward', 'Ward (floor)'], ['ICU', 'ICU / CCU'], ['Home', 'Discharge home (ends the case)']];
+    $('move-list').innerHTML = locs.map(([k, l]) => `<button class="choice ${sim.loc === k ? 'cur' : ''}" data-k="${k}">${l}${sim.loc === k ? '<small>current</small>' : ''}</button>`).join('');
+    $('move-list').querySelectorAll('.choice').forEach(b => b.onclick = () => {
+      const k = b.dataset.k;
+      closeModal('sheet-move');
+      if (k === sim.loc) return;
+      act({ a: 'mv', loc: k });
+      if (k === 'Home') openEnd('home');
+    });
+    openModal('sheet-move');
+  }
+
+  function openEnd(why) {
+    const forced = why === 'dead' || why === 'time' || why === 'home';
+    $('end-title').textContent = why === 'dead' ? 'The patient has died' : why === 'time' ? 'Time\'s up' : why === 'home' ? 'Patient discharged' : 'End the case';
+    $('end-note').textContent = why === 'dead' ? 'Enter your diagnosis to see the debrief.'
+      : why === 'time' ? 'The case has reached its time limit. Enter your final diagnosis.'
+      : why === 'home' ? 'Enter your final diagnosis to finish.'
+      : 'Ending the case stops the simulation. Make sure your final orders are in, then enter your diagnosis.';
+    $('end-close').style.display = forced ? 'none' : '';
+    $('sheet-end').dataset.forced = forced ? '1' : '';
+    $('dx-input').value = '';
+    renderDx();
+    openModal('sheet-end');
+    setTimeout(() => $('dx-input').focus(), 50);
+  }
+  function renderDx() {
+    const q = $('dx-input').value.trim().toLowerCase();
+    const items = DX.filter(([, n]) => !q || q.split(/\s+/).every(t => n.toLowerCase().includes(t)));
+    $('dx-list').innerHTML = items.map(([k, n]) => `<button class="choice" data-k="${k}">${n}</button>`).join('');
+    $('dx-list').querySelectorAll('.choice').forEach(b => b.onclick = () => {
+      closeModal('sheet-end');
+      act({ a: 'end', dx: b.dataset.k });
+      finish();
+    });
+  }
+
+  // ── Finish / results ──
+  function finish() {
+    const g = grade(sim);
+    const squares = g.crit.map(k => critSq(k.c)).join('');
+    const entry = {
+      dayIndex: game.dayIndex, puzzleNum: game.puzzleNum, caseId: game.cs.id, score: g.score, squares,
+      harms: sim.harms.length, extras: g.extras.length, simMin: sim.t, dead: sim.dead, log: sim.log,
+    };
+    if (!game.practice) {
+      if (!loadHistory().some(e => e.dayIndex === entry.dayIndex)) saveResult(entry);
+      lsDel(progressKey(game.dayIndex));
+      postScore(game.dayIndex, g.score);
+    }
+    showResults(entry, g);
+  }
+
+  function buildShareText(entry) {
+    const head = game.practice ? '📋 Orders (practice)' : `📋 Orders #${entry.puzzleNum}`;
+    const bits = [];
+    if (entry.harms) bits.push(`⚠️ ${entry.harms} harmful`);
+    if (entry.extras) bits.push(`🗑️ ${entry.extras} unnecessary`);
+    const lines = [`${head} — ${entry.score}/100`, entry.squares];
+    if (entry.dead) lines.push('💀 Patient died');
+    if (bits.length) lines.push(bits.join(' · '));
+    lines.push(`⏱️ ${fmtDur(entry.simMin)} simulated`, SHARE_URL);
+    return lines.join('\n');
+  }
+
+  function share(text) {
+    if (navigator.share) navigator.share({ text }).catch(err => { if (err && err.name !== 'AbortError') copyText(text); });
+    else copyText(text);
+  }
+  function copyText(text) {
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!'));
+    else {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      showToast('Copied to clipboard!');
+    }
+  }
+
+  function showResults(entry, g) {
+    const cs = game.cs;
+    $('toast').classList.remove('show');
+    $('res-label').textContent = game.practice ? 'Practice case' : `Case #${entry.puzzleNum}`;
+    $('res-score').textContent = g.score;
+    $('res-grade').textContent = gradeFor(g.score);
+    $('res-dead').style.display = sim.dead ? '' : 'none';
+    const right = (cs.dx[sim.dx] || 0) >= 0.99;
+    $('res-dx').innerHTML = `Diagnosis: <b>${cs.dxName}</b>` + (sim.dx ? `<br>You said: ${esc(DX_NAME[sim.dx])} ${right ? '✅' : (cs.dx[sim.dx] || 0) > 0 ? '🟨' : '❌'}` : '');
+    $('res-grid').textContent = entry.squares;
+    $('res-meta').textContent = `${fmtDur(sim.t)} simulated · ${sim.orders.length} orders`;
+
+    $('res-crit').innerHTML = g.crit.map(k => `<div class="crit"><span class="ic">${critSq(k.c)}</span>
+      <div class="bd">${k.label}${k.note ? `<small>${k.note}</small>` : ''}</div><span class="pt">${+(k.pts * k.c).toFixed(1)}/${k.pts}</span></div>`).join('');
+    $('res-harms-wrap').style.display = sim.harms.length ? '' : 'none';
+    $('res-harms').innerHTML = sim.harms.map(h => `<div class="crit harm"><span class="ic">⚠️</span>
+      <div class="bd">${h.label}<small>${h.why}</small></div><span class="pt">−${h.pts}</span></div>`).join('');
+    $('res-extras-wrap').style.display = g.extras.length ? '' : 'none';
+    $('res-extras').innerHTML = g.extras.map(id => `<span class="chip">${esc(ITEM[id].name)}</span>`).join('')
+      + `<div class="sheet-note" style="width:100%;margin:6px 0 0">−2 each, up to −10. (−${g.extraPts})</div>`;
+    $('res-pearls').innerHTML = cs.pearls.map(p => `<li>${p}</li>`).join('');
+
+    const hist = loadHistory();
+    const scores = hist.map(e => e.score);
+    $('st-played').textContent = scores.length;
+    $('st-avg').textContent = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+    $('st-best').textContent = scores.length ? Math.max(...scores) : 0;
+    $('st-days').textContent = computeDayStreak(getDayIndex());
+    $('stats-block').style.display = game.practice ? 'none' : '';
+    $('next-in').style.display = game.practice ? 'none' : '';
+    $('btn-back-daily').style.display = game.practice ? '' : 'none';
+    $('btn-share').onclick = () => share(buildShareText(entry));
+    $('btn-copy').onclick = () => copyText(buildShareText(entry));
+    if (game.practice) $('community').style.display = 'none';
+    else loadCommunityStats(entry.dayIndex, g.score);
+
+    renderCase(true, true);
+    setState('result');
+    scrollTo({ top: 0 });
+  }
+
+  function tickCountdown() {
+    const now = Date.now();
+    const next = Math.floor(now / 86400000) * 86400000 + 86400000;
+    const s = Math.max(0, Math.floor((next - now) / 1000));
+    const pad = n => String(n).padStart(2, '0');
+    $('next-in').innerHTML = `Next case in <strong>${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}</strong>`;
+  }
+
+  function renderHistory() {
+    const hist = loadHistory();
+    $('hist-list').innerHTML = hist.length
+      ? hist.slice(0, 60).map(e => `<div class="hist-item"><div class="hi-num">#${e.puzzleNum}</div><div class="hi-grid">${e.squares}${e.dead ? ' 💀' : ''}</div><div class="hi-score">${e.score}</div></div>`).join('')
+      : '<p class="sheet-note">No cases yet.</p>';
+  }
+
+  function renderPracticeList() {
+    $('practice-list').innerHTML = CASES.map(c => `<button class="choice" data-id="${c.id}"><span><b>${c.who}</b><br><small>${c.where} · ${c.cc}</small></span></button>`).join('');
+    $('practice-list').querySelectorAll('.choice').forEach(b => b.onclick = () => {
+      closeModal('modal-practice');
+      startPractice(CASE_BY_ID[b.dataset.id]);
+    });
+  }
+
+  function startPractice(cs) {
+    game = { cs, dayIndex: getDayIndex(), puzzleNum: null, practice: true };
+    sim = newSim(cs);
+    beginPlaying();
+  }
+
+  function beginPlaying() {
+    setState('playing');
+    renderCase(true);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COMMUNITY STATS (Supabase)
+  // ═══════════════════════════════════════════════════════════════
+
+  const BUCKETS = [
+    { label: '0–49',   test: n => n < 50 },
+    { label: '50–69',  test: n => n >= 50 && n < 70 },
+    { label: '70–84',  test: n => n >= 70 && n < 85 },
+    { label: '85–94',  test: n => n >= 85 && n < 95 },
+    { label: '95–100', test: n => n >= 95 },
+  ];
+
+  function postScore(dayIndex, score) {
+    if (!SUPABASE_URL || TEST_MODE || lsGet(postedKey(dayIndex), false)) return;
+    fetch(`${SUPABASE_URL}/rest/v1/scores`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ day_index: dayIndex + STATS_DAY_OFFSET, grade: String(score) })
+    }).then(r => { if (r.ok) lsSet(postedKey(dayIndex), true); }).catch(() => {});
+  }
+
+  async function loadCommunityStats(dayIndex, myScore) {
+    const wrap = $('community');
+    if (!SUPABASE_URL || TEST_MODE) { wrap.style.display = 'none'; return; }
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/scores?day_index=eq.${dayIndex + STATS_DAY_OFFSET}&select=grade`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (!res.ok) throw new Error(res.status);
+      const scores = (await res.json()).map(r => parseInt(r.grade, 10)).filter(n => !isNaN(n));
+      if (!scores.length) { wrap.style.display = 'none'; return; }
+      $('community-chart').innerHTML = BUCKETS.map(b => {
+        const n = scores.filter(b.test).length;
+        const pct = Math.round(n / scores.length * 100);
+        return `<div class="community-row"><div class="community-lbl">${b.label}</div>
+          <div class="community-bar-bg"><div class="community-bar ${b.test(myScore) ? 'player' : ''}" style="width:${n ? Math.max(pct, 5) : 0}%"></div></div>
+          <div class="community-pct">${pct}% (${n})</div></div>`;
+      }).join('');
+      const beat = scores.filter(x => x < myScore).length;
+      $('community-note').textContent = scores.length > 1
+        ? `${scores.length} players today · you beat ${Math.round(beat / scores.length * 100)}% of them`
+        : `${scores.length} player today`;
+      wrap.style.display = '';
+    } catch {
+      wrap.style.display = 'none';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BOOT
+  // ═══════════════════════════════════════════════════════════════
+
+  function boot() {
+    const dayIndex = getDayIndex();
+    const pick = QS.get('case');
+    const cs = (pick && CASE_BY_ID[pick]) || (TEST_MODE ? CASES[Math.floor(Math.random() * CASES.length)] : caseForDay(dayIndex));
+    const practice = TEST_MODE || !!(pick && CASE_BY_ID[pick]);
+    game = { cs, dayIndex, puzzleNum: dayIndex + 1, practice };
+
+    if (!practice) {
+      const done = loadHistory().find(e => e.dayIndex === dayIndex);
+      if (done && CASE_BY_ID[done.caseId]) {
+        game.cs = CASE_BY_ID[done.caseId];
+        sim = replay(game.cs, done.log || []);
+        showResults(done, grade(sim));
+        return;
+      }
+      const prog = lsGet(progressKey(dayIndex), null);
+      if (prog && prog.caseId === cs.id && prog.log.length) {
+        sim = replay(cs, prog.log);
+        if (sim.ended) { finish(); return; }
+      } else sim = null;
+    } else sim = null;
+
+    $('start-sub').textContent = practice ? (TEST_MODE ? 'Test mode' : 'Practice case') : `Daily case #${game.puzzleNum}`;
+    $('pv-who').textContent = game.cs.who;
+    $('pv-where').textContent = game.cs.where;
+    $('pv-cc').textContent = game.cs.cc;
+    $('btn-start').textContent = sim ? `Resume (${fmtClock(sim, sim.t)})` : 'Start case';
+    setState('start');
+  }
+
+  function init() {
+    $('puzzle-num').innerHTML = TEST_MODE ? '<span class="test-badge">Test mode</span>' : `#${getDayIndex() + 1}`;
+
+    document.querySelectorAll('.overlay').forEach(o => {
+      o.addEventListener('click', e => {
+        if (o.dataset.forced) return;
+        if (e.target === o || e.target.closest('[data-close]')) o.classList.remove('open');
+      });
+    });
+    $('btn-help').onclick = () => openModal('modal-help');
+    $('btn-stats').onclick = () => { renderHistory(); openModal('modal-stats'); };
+    const openPractice = () => { renderPracticeList(); openModal('modal-practice'); };
+    $('btn-practice-start').onclick = openPractice;
+    $('btn-practice-res').onclick = openPractice;
+    $('btn-back-daily').onclick = () => { history.replaceState(null, '', location.pathname); boot(); };
+    $('btn-start').onclick = () => {
+      lsSet(VISITED_KEY, true);
+      if (!sim) sim = newSim(game.cs);
+      beginPlaying();
+    };
+
+    const inp = $('order-input');
+    inp.addEventListener('input', renderTA);
+    inp.addEventListener('focus', renderTA);
+    inp.addEventListener('blur', () => setTimeout(() => $('ta-list').classList.remove('open'), 120));
+    inp.addEventListener('keydown', e => {
+      if (!$('ta-list').classList.contains('open') || !taItems.length) return;
+      if (e.key === 'ArrowDown') { taIdx = (taIdx + 1) % taItems.length; hlTA(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { taIdx = (taIdx - 1 + taItems.length) % taItems.length; hlTA(); e.preventDefault(); }
+      else if (e.key === 'Enter') { pickItem(taItems[taIdx]); e.preventDefault(); }
+      else if (e.key === 'Escape') { $('ta-list').classList.remove('open'); }
+    });
+
+    $('btn-exam').onclick = openExam;
+    $('btn-exam-all').onclick = () => $('exam-list').querySelectorAll('input').forEach(i => i.checked = true);
+    $('btn-exam-go').onclick = () => {
+      const secs = [...$('exam-list').querySelectorAll('input:checked')].map(i => i.value);
+      if (!secs.length) { showToast('Pick at least one system'); return; }
+      closeModal('sheet-exam');
+      act({ a: 'exam', secs });
+    };
+    $('btn-hx').onclick = () => act({ a: 'hx' });
+    $('btn-clock').onclick = () => { if (sim.timeUp) openEnd('time'); else openClock(); };
+    $('btn-active').onclick = openActive;
+    $('btn-move').onclick = openMove;
+    $('btn-end').onclick = () => openEnd('');
+    $('dx-input').addEventListener('input', renderDx);
+
+    tickCountdown();
+    setInterval(tickCountdown, 1000);
+    if (!TEST_MODE && !lsGet(VISITED_KEY, false)) openModal('modal-help');
+    boot();
+  }
+
+  if (typeof window !== 'undefined') init();
+</script>
+</body>
+</html>
