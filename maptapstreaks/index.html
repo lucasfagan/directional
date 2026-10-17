@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Map Tap Streaks</title>
+  <meta name="description" content="A daily geography streak game. Find countries on a satellite globe with no borders — how many can you get in a row?">
+  <meta property="og:title" content="Map Tap Streaks">
+  <meta property="og:description" content="A daily geography streak game. Find countries on a satellite globe with no borders — how many can you get in a row?">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://directional.global/maptapstreaks">
+  <meta property="og:image" content="https://directional.global/og-directional.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Map Tap Streaks">
+  <meta name="twitter:description" content="A daily geography streak game. Find countries on a satellite globe with no borders — how many can you get in a row?">
+  <meta name="twitter:image" content="https://directional.global/og-directional.png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+  <style>
+    :root {
+      --bg: #05070f;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --border: #263054;
+      --accent: #4f9cff;
+      --text: #e2e8f8;
+      --text-dim: #8592b8;
+      --easy: #3ecf6e;
+      --medium: #ff9a2e;
+      --hard: #ff4d4d;
+      --good: #4cdf8a;
+      --bad: #ff5a5a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── MAP ─────────────────────────────────────── */
+    #map {
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse at center, #0b1430 0%, #05070f 70%);
+      -webkit-touch-callout: none;
+      -webkit-user-select: none; user-select: none;
+      touch-action: none;
+    }
+    .maplibregl-ctrl-attrib { font-size: 10px; }
+    .maplibregl-ctrl-top-right { top: 60px; }
+
+    #hold-ring {
+      position: fixed; width: 76px; height: 76px;
+      margin: -38px 0 0 -38px; pointer-events: none;
+      z-index: 20; display: none;
+    }
+    #hold-ring.show { display: block; }
+    #hold-ring .track { fill: rgba(0,0,0,0.25); stroke: rgba(255,255,255,0.35); stroke-width: 5; }
+    #hold-ring .fill {
+      fill: none; stroke: #fff; stroke-width: 5; stroke-linecap: round;
+      stroke-dasharray: 201.06; stroke-dashoffset: 201.06;
+      transform: rotate(-90deg); transform-origin: 38px 38px;
+    }
+    #hold-ring.filling .fill { transition: stroke-dashoffset var(--hold-ms, 500ms) linear; stroke-dashoffset: 0; }
+    #hold-ring .dot { fill: #fff; }
+
+    .tap-pin {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: rgba(79,156,255,0.35); border: 3px solid #fff;
+      box-shadow: 0 0 0 2px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.5);
+    }
+    .tap-pin.miss { background: rgba(255,90,90,0.5); }
+    .target-ring {
+      width: 56px; height: 56px; border-radius: 50%;
+      border: 3px solid var(--bad); box-shadow: 0 0 12px rgba(255,90,90,0.6);
+      animation: ring-pulse 1.4s ease-in-out infinite; pointer-events: none;
+    }
+    @keyframes ring-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: 0.6; } }
+
+    /* ── HEADER ──────────────────────────────────── */
+    header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: max(10px, env(safe-area-inset-top)) 16px 18px;
+      background: linear-gradient(to bottom, rgba(5,7,15,0.85), rgba(5,7,15,0));
+      pointer-events: none;
+    }
+    header > * { pointer-events: auto; }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { font-size: 1.6rem; line-height: 1; }
+    .logo-text { display: flex; flex-direction: column; }
+    .logo-name {
+      font-size: 1rem; font-weight: 800;
+      letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .puzzle-num { font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.08em; }
+    .test-badge {
+      font-size: 0.6rem; color: #ff9944; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .header-btns { display: flex; gap: 8px; }
+    .icon-btn {
+      width: 36px; height: 36px;
+      background: rgba(26,34,53,0.85); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px; cursor: pointer;
+      font-size: 1rem; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .icon-btn:hover { background: var(--border); }
+
+    /* ── STATE MACHINE ───────────────────────────── */
+    .panel { display: none; }
+    body[data-state="start"]   #panel-start   { display: flex; }
+    body[data-state="playing"] #panel-playing { display: flex; }
+    body[data-state="missed"]  #panel-playing { display: flex; }
+    body[data-state="result"]  #panel-result  { display: flex; }
+    body[data-state="map"]     #panel-map     { display: flex; }
+
+    /* ── START CARD ──────────────────────────────── */
+    #panel-start {
+      position: fixed; inset: 0; z-index: 15;
+      align-items: flex-end; justify-content: center;
+      padding: 16px 16px max(28px, env(safe-area-inset-bottom));
+      pointer-events: none;
+    }
+    .card {
+      background: rgba(17,24,39,0.94); border: 1px solid var(--border);
+      border-radius: 16px; padding: 22px 20px; width: 100%; max-width: 440px;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      pointer-events: auto;
+    }
+    .start-card { text-align: center; }
+    .start-title {
+      font-size: 1.35rem; font-weight: 800; letter-spacing: 0.12em;
+      text-transform: uppercase; margin-bottom: 4px;
+    }
+    .start-sub { font-size: 0.78rem; color: var(--text-dim); letter-spacing: 0.08em; margin-bottom: 14px; }
+    .start-desc { font-size: 0.9rem; color: var(--text-dim); line-height: 1.6; margin-bottom: 16px; }
+    .start-desc strong { color: var(--text); }
+    .tier-legend { display: flex; justify-content: center; gap: 14px; font-size: 0.8rem; margin-bottom: 18px; flex-wrap: wrap; }
+    .tier-legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); }
+
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .dot.E { background: var(--easy); }
+    .dot.M { background: var(--medium); }
+    .dot.H { background: var(--hard); }
+
+    /* ── BUTTONS ─────────────────────────────────── */
+    .btn {
+      border-radius: 10px; font-size: 0.92rem; font-weight: 600;
+      cursor: pointer; padding: 12px 20px; border: 1px solid transparent;
+      transition: opacity 0.15s, transform 0.1s; color: var(--text);
+      font-family: inherit;
+    }
+    .btn:hover:not(:disabled) { opacity: 0.88; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .btn-primary  { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-secondary { background: var(--surface2); border-color: var(--border); }
+    .btn-lg { padding: 14px 36px; font-size: 1rem; border-radius: 12px; }
+    .btn-block { width: 100%; }
+    .btn-row { display: flex; gap: 10px; width: 100%; }
+    .btn-row .btn { flex: 1; }
+
+    /* ── PLAYING ─────────────────────────────────── */
+    #panel-playing {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+      justify-content: center;
+      padding: 0 12px max(14px, env(safe-area-inset-bottom));
+      pointer-events: none;
+    }
+    .prompt {
+      width: 100%; max-width: 440px;
+      background: rgba(17,24,39,0.92); border: 1px solid var(--border);
+      border-radius: 16px; padding: 12px 16px;
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      pointer-events: auto;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .prompt.flash-good { border-color: var(--good); box-shadow: 0 0 0 2px rgba(76,223,138,0.35); }
+    .prompt.flash-bad  { border-color: var(--bad);  box-shadow: 0 0 0 2px rgba(255,90,90,0.35); }
+    .prompt-row { display: flex; align-items: center; gap: 12px; }
+    .prompt-main { flex: 1; min-width: 0; }
+    .prompt-label {
+      font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--text-dim); display: flex; align-items: center; gap: 6px;
+    }
+    .prompt-country {
+      font-size: 1.45rem; font-weight: 800; line-height: 1.2;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .prompt-country.pop { animation: pop 260ms ease-out; }
+    @keyframes pop { 0% { transform: scale(0.85); opacity: 0.2; } 100% { transform: none; opacity: 1; } }
+    .streak-box { text-align: center; min-width: 54px; }
+    .streak-num { font-size: 1.5rem; font-weight: 800; line-height: 1.1; }
+    .streak-num.bump { animation: bump 300ms ease-out; }
+    @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.35); color: var(--good); } 100% { transform: scale(1); } }
+    .streak-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); }
+    .prompt-hint { font-size: 0.74rem; color: var(--text-dim); margin-top: 6px; }
+    .prompt-actions { margin-top: 10px; display: none; }
+    body.mode-tap[data-state="playing"] .prompt-actions.confirm { display: flex; }
+    body.mode-tap .hint-hold { display: none; }
+    body:not(.mode-tap) .hint-tap { display: none; }
+    body[data-state="missed"] .prompt-actions.after-miss { display: flex; }
+    body[data-state="missed"] .prompt-hint { display: none; }
+    .miss-msg { font-size: 0.9rem; line-height: 1.45; margin-top: 4px; display: none; }
+    .miss-msg strong { color: var(--text); }
+    body[data-state="missed"] .miss-msg { display: block; }
+
+    /* ── RESULT SHEET ────────────────────────────── */
+    #panel-result {
+      position: fixed; inset: 0; z-index: 30;
+      background: rgba(5,7,15,0.55);
+      align-items: flex-end; justify-content: center;
+      padding-top: 60px;
+    }
+    .sheet {
+      width: 100%; max-width: 480px; max-height: 100%;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      background: var(--surface); border: 1px solid var(--border); border-bottom: none;
+      border-radius: 18px 18px 0 0;
+      padding: 22px 18px max(22px, env(safe-area-inset-bottom));
+      animation: sheet-up 320ms ease-out;
+    }
+    @keyframes sheet-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .res-top { text-align: center; margin-bottom: 14px; }
+    .res-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-dim); }
+    .res-score { font-size: 3.6rem; font-weight: 900; line-height: 1.05; }
+    .res-sub { font-size: 0.88rem; color: var(--text-dim); }
+    .res-grid {
+      font-size: 1.35rem; line-height: 1.35; letter-spacing: 2px;
+      text-align: center; margin: 12px 0 16px; word-break: break-all;
+    }
+    .section-title {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); margin: 16px 0 8px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .found-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 5px 9px; font-size: 0.8rem;
+    }
+    .chip.missed { border-color: var(--bad); }
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+    .stat-num { font-size: 1.35rem; font-weight: 800; }
+    .stat-lbl { font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+    .community-chart { display: flex; flex-direction: column; gap: 5px; }
+    .community-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+    .community-lbl { min-width: 48px; color: var(--text-dim); }
+    .community-bar-bg { flex: 1; background: var(--surface2); border-radius: 4px; height: 16px; overflow: hidden; }
+    .community-bar { height: 100%; border-radius: 4px; background: #3a4670; }
+    .community-bar.player { background: var(--accent); }
+    .community-pct { min-width: 64px; text-align: right; color: var(--text-dim); font-size: 0.75rem; }
+    .community-note { font-size: 0.78rem; color: var(--text-dim); margin-top: 8px; text-align: center; }
+    .next-in { text-align: center; font-size: 0.82rem; color: var(--text-dim); margin: 16px 0 12px; }
+    .next-in strong { color: var(--text); font-variant-numeric: tabular-nums; }
+
+    /* ── MAP VIEW (after results) ────────────────── */
+    #panel-map {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+      justify-content: center; padding: 0 12px max(16px, env(safe-area-inset-bottom));
+      pointer-events: none;
+    }
+    #panel-map .btn { pointer-events: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+
+    /* ── MODALS ──────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100; padding: 16px; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 22px; max-width: 420px; width: 100%;
+      max-height: 85vh; overflow-y: auto;
+    }
+    .modal-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .modal-title { font-size: 1.15rem; font-weight: 700; }
+    .modal-close {
+      background: none; border: none; color: var(--text-dim);
+      font-size: 1.2rem; cursor: pointer; padding: 4px 8px;
+    }
+    .modal-section { margin-bottom: 18px; }
+    .modal-section h3 {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-dim); margin-bottom: 10px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-section p { font-size: 0.875rem; color: var(--text-dim); line-height: 1.65; }
+    .modal-section p + p { margin-top: 8px; }
+    .modal-section strong { color: var(--text); }
+    .modal-section a { color: var(--accent); }
+
+    .opt {
+      display: flex; gap: 12px; align-items: flex-start;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px; cursor: pointer; margin-bottom: 8px;
+    }
+    .opt input { margin-top: 3px; accent-color: var(--accent); }
+    .opt.sel { border-color: var(--accent); }
+    .opt-title { font-weight: 700; font-size: 0.9rem; }
+    .opt-desc { font-size: 0.8rem; color: var(--text-dim); line-height: 1.5; margin-top: 2px; }
+
+    .hist-item {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface2); border-radius: 8px; padding: 9px 12px; margin-bottom: 6px;
+    }
+    .hi-num { font-size: 0.75rem; color: var(--text-dim); min-width: 36px; }
+    .hi-grid { flex: 1; font-size: 0.7rem; letter-spacing: 1px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .hi-score { font-weight: 800; font-size: 0.95rem; }
+
+    #toast {
+      position: fixed; top: 70px; left: 50%;
+      transform: translateX(-50%) translateY(-120px);
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); padding: 9px 20px; border-radius: 20px;
+      font-size: 0.875rem; z-index: 200; transition: transform 0.3s ease; white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    #loading {
+      position: fixed; inset: 0; z-index: 50; display: flex;
+      align-items: center; justify-content: center; color: var(--text-dim);
+      font-size: 0.9rem; letter-spacing: 0.08em; pointer-events: none;
+    }
+    body.ready #loading { display: none; }
+  </style>
+</head>
+<body data-state="loading">
+  <div id="map"></div>
+
+  <svg id="hold-ring" viewBox="0 0 76 76">
+    <circle class="track" cx="38" cy="38" r="32"/>
+    <circle class="fill" cx="38" cy="38" r="32"/>
+    <circle class="dot" cx="38" cy="38" r="3"/>
+  </svg>
+
+  <div id="loading">Loading globe…</div>
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🌍</div>
+      <div class="logo-text">
+        <div class="logo-name">Map Tap Streaks</div>
+        <div class="puzzle-num" id="puzzle-num"></div>
+      </div>
+    </div>
+    <div class="header-btns">
+      <button class="icon-btn" id="btn-help" title="How to play">?</button>
+      <button class="icon-btn" id="btn-settings" title="Settings">⚙</button>
+      <button class="icon-btn" id="btn-stats" title="Stats">📊</button>
+    </div>
+  </header>
+
+  <!-- START -->
+  <div class="panel" id="panel-start">
+    <div class="card start-card">
+      <div class="start-title">Map Tap Streaks</div>
+      <div class="start-sub" id="start-sub"></div>
+      <p class="start-desc" id="start-desc">
+        A country is named. <strong>Find it on the globe</strong> — no borders, no labels.
+        Get as many as you can in a row. <strong>One miss ends your run.</strong>
+        <br><span id="start-mode-desc"></span>
+      </p>
+      <div class="tier-legend">
+        <span><i class="dot E"></i>Easy</span>
+        <span><i class="dot M"></i>Medium</span>
+        <span><i class="dot H"></i>Hard</span>
+      </div>
+      <button class="btn btn-primary btn-lg btn-block" id="btn-start">Start</button>
+    </div>
+  </div>
+
+  <!-- PLAYING / MISSED -->
+  <div class="panel" id="panel-playing">
+    <div class="prompt" id="prompt">
+      <div class="prompt-row">
+        <div class="prompt-main">
+          <div class="prompt-label"><span id="prompt-label-text">Find</span> <i class="dot" id="prompt-dot"></i></div>
+          <div class="prompt-country" id="prompt-country"></div>
+        </div>
+        <div class="streak-box">
+          <div class="streak-num" id="streak-num">0</div>
+          <div class="streak-lbl">Streak</div>
+        </div>
+      </div>
+      <div class="prompt-hint">
+        <span class="hint-hold">Press &amp; hold on the country to guess. Drag &amp; pinch to explore.</span>
+        <span class="hint-tap">Tap to drop a pin, then confirm. Drag &amp; pinch to explore.</span>
+      </div>
+      <div class="miss-msg" id="miss-msg"></div>
+      <div class="prompt-actions confirm">
+        <button class="btn btn-primary btn-block" id="btn-confirm" disabled>Confirm</button>
+      </div>
+      <div class="prompt-actions after-miss">
+        <button class="btn btn-primary btn-block" id="btn-see-results">See results</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="panel" id="panel-result">
+    <div class="sheet">
+      <div class="res-top">
+        <div class="res-label" id="res-label">Today's streak</div>
+        <div class="res-score" id="res-score">0</div>
+        <div class="res-sub" id="res-sub"></div>
+      </div>
+      <div class="res-grid" id="res-grid"></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-share">Share</button>
+        <button class="btn btn-secondary" id="btn-view-map">View map</button>
+      </div>
+      <button class="btn btn-secondary btn-block" id="btn-play-again" style="display:none;margin-top:10px">Play Again</button>
+      <div class="next-in" id="next-in"></div>
+
+      <div class="section-title">Countries</div>
+      <div class="found-list" id="found-list"></div>
+
+      <div class="section-title">Your stats</div>
+      <div class="stats-row">
+        <div><div class="stat-num" id="st-played">0</div><div class="stat-lbl">Played</div></div>
+        <div><div class="stat-num" id="st-best">0</div><div class="stat-lbl">Best</div></div>
+        <div><div class="stat-num" id="st-avg">0</div><div class="stat-lbl">Average</div></div>
+        <div><div class="stat-num" id="st-days">0</div><div class="stat-lbl">Day streak</div></div>
+      </div>
+
+      <div id="community" style="display:none">
+        <div class="section-title">Everyone today</div>
+        <div class="community-chart" id="community-chart"></div>
+        <div class="community-note" id="community-note"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP VIEW -->
+  <div class="panel" id="panel-map">
+    <button class="btn btn-primary btn-lg" id="btn-back-results">Back to results</button>
+  </div>
+
+  <!-- HELP -->
+  <div class="overlay" id="modal-help">
+    <div class="modal">
+      <div class="modal-hdr">
+        <div class="modal-title">How to play</div>
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div class="modal-section">
+        <h3>The game</h3>
+        <p>Each round names a country. Find it on the satellite globe — there are <strong>no borders and no labels</strong>, just the planet.</p>
+        <p>Keep going as long as you can. <strong>One miss ends your run</strong>, and your score is how many you got in a row.</p>
+        <p>Everyone gets the same countries in the same order. A new puzzle drops every day at <strong>midnight UTC</strong>.</p>
+      </div>
+      <div class="modal-section">
+        <h3>Guessing</h3>
+        <p><strong>Press &amp; hold</strong> (default): hold your finger still on a spot and a ring fills up — when it completes, that's your guess. Dragging or pinching cancels it, so you can explore freely.</p>
+        <p><strong>Tap + confirm</strong>: tap to drop a pin, then hit Confirm. Switch modes in ⚙ Settings.</p>
+        <p>Tiny countries and island nations have a little wiggle room — get close and it counts.</p>
+      </div>
+      <div class="modal-section">
+        <h3>Difficulty</h3>
+        <p><i class="dot E"></i> <strong>Easy</strong> — big or unmistakable<br>
+           <i class="dot M"></i> <strong>Medium</strong> — mid-size, findable<br>
+           <i class="dot H"></i> <strong>Hard</strong> — small or tricky</p>
+        <p>The run starts gentle and gets harder as you go. Your share grid shows the difficulty of every country you found.</p>
+      </div>
+      <div class="modal-section">
+        <h3>Feedback</h3>
+        <p>Ideas or bugs? <a href="mailto:feedback@directional.global">feedback@directional.global</a> · Also try <a href="/">Directional</a>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="overlay" id="modal-settings">
+    <div class="modal">
+      <div class="modal-hdr">
+        <div class="modal-title">Settings</div>
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div class="modal-section">
+        <h3>How to guess</h3>
+        <label class="opt" data-mode="hold">
+          <input type="radio" name="mode" value="hold">
+          <div><div class="opt-title">Press &amp; hold</div><div class="opt-desc">Hold still for half a second until the ring fills. No accidental guesses.</div></div>
+        </label>
+        <label class="opt" data-mode="tap">
+          <input type="radio" name="mode" value="tap">
+          <div><div class="opt-title">Tap + confirm</div><div class="opt-desc">Tap to drop a pin (tap again to move it), then press Confirm.</div></div>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATS / HISTORY -->
+  <div class="overlay" id="modal-stats">
+    <div class="modal">
+      <div class="modal-hdr">
+        <div class="modal-title">Your history</div>
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div id="hist-list"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+  // ═══════════════════════════════════════════════════════════════
+  // CONFIG
+  // ═══════════════════════════════════════════════════════════════
+
+  const SUPABASE_URL = 'https://qnlzjddurxpfszhitreb.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_s0MLm4hC1PUsCwAK4HszUg_lLCQWmau';
+  const STATS_DAY_OFFSET = 200000; // shares the Directional `scores` table (US edition uses +100000)
+
+  const TEST_MODE = new URLSearchParams(location.search).has('test');
+
+  const SEED_BASE  = 161803398;
+  const LAUNCH_UTC = Date.UTC(2026, 9, 17); // Oct 17, 2026 = puzzle #1
+  const HOLD_MS    = 500;
+  const MOVE_CANCEL_PX = 10;
+  const SHARE_URL  = 'directional.global/maptapstreaks';
+
+  const SAT_TILES = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg';
+  const ATLAS_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json';
+
+  // ═══════════════════════════════════════════════════════════════
+  // COUNTRIES — [display name, tier, world-atlas name (if different)]
+  // E = big / unmistakable, M = findable, H = small or tricky
+  // ═══════════════════════════════════════════════════════════════
+
+  const COUNTRIES = [
+    // ── Easy ──
+    ['Russia', 'E'], ['United States', 'E', 'United States of America'], ['Canada', 'E'],
+    ['China', 'E'], ['Brazil', 'E'], ['Australia', 'E'], ['India', 'E'], ['Argentina', 'E'],
+    ['Mexico', 'E'], ['Kazakhstan', 'E'], ['Algeria', 'E'], ['Saudi Arabia', 'E'], ['Egypt', 'E'],
+    ['Indonesia', 'E'], ['Iran', 'E'], ['Mongolia', 'E'], ['Libya', 'E'], ['South Africa', 'E'],
+    ['Japan', 'E'], ['United Kingdom', 'E'], ['France', 'E'], ['Spain', 'E'], ['Italy', 'E'],
+    ['Germany', 'E'], ['Turkey', 'E'], ['Madagascar', 'E'], ['Chile', 'E'], ['New Zealand', 'E'],
+    ['Ethiopia', 'E'], ['Peru', 'E'], ['Colombia', 'E'], ['DR Congo', 'E', 'Dem. Rep. Congo'],
+    ['Ukraine', 'E'], ['Sweden', 'E'], ['Norway', 'E'], ['Pakistan', 'E'], ['Iceland', 'E'],
+    ['Sudan', 'E'], ['Venezuela', 'E'], ['Bolivia', 'E'], ['Finland', 'E'], ['Cuba', 'E'],
+    ['Sri Lanka', 'E'], ['Thailand', 'E'], ['Philippines', 'E'], ['Afghanistan', 'E'], ['Iraq', 'E'],
+
+    // ── Medium ──
+    ['Chad', 'M'], ['Niger', 'M'], ['Mali', 'M'], ['Angola', 'M'], ['Nigeria', 'M'],
+    ['Mauritania', 'M'], ['Namibia', 'M'], ['Botswana', 'M'], ['Zambia', 'M'], ['Zimbabwe', 'M'],
+    ['Mozambique', 'M'], ['Tanzania', 'M'], ['Kenya', 'M'], ['Somalia', 'M'], ['South Sudan', 'M', 'S. Sudan'],
+    ['Central African Republic', 'M', 'Central African Rep.'], ['Cameroon', 'M'], ['Gabon', 'M'],
+    ['Republic of the Congo', 'M', 'Congo'], ['Morocco', 'M'], ['Tunisia', 'M'], ['Ghana', 'M'],
+    ['Ivory Coast', 'M', "Côte d'Ivoire"], ['Senegal', 'M'], ['Guinea', 'M'], ['Burkina Faso', 'M'],
+    ['Uganda', 'M'], ['Malawi', 'M'], ['Eritrea', 'M'],
+    ['Myanmar', 'M'], ['Vietnam', 'M'], ['Laos', 'M'], ['Cambodia', 'M'], ['Malaysia', 'M'],
+    ['Papua New Guinea', 'M'], ['Bangladesh', 'M'], ['Nepal', 'M'], ['North Korea', 'M'],
+    ['South Korea', 'M'], ['Taiwan', 'M'], ['Uzbekistan', 'M'], ['Turkmenistan', 'M'],
+    ['Kyrgyzstan', 'M'], ['Tajikistan', 'M'], ['Oman', 'M'], ['Yemen', 'M'], ['Syria', 'M'],
+    ['Jordan', 'M'], ['United Arab Emirates', 'M'], ['Israel', 'M'], ['Azerbaijan', 'M'], ['Georgia', 'M'],
+    ['Poland', 'M'], ['Romania', 'M'], ['Belarus', 'M'], ['Greece', 'M'], ['Portugal', 'M'],
+    ['Austria', 'M'], ['Switzerland', 'M'], ['Ireland', 'M'], ['Netherlands', 'M'], ['Belgium', 'M'],
+    ['Czechia', 'M'], ['Hungary', 'M'], ['Bulgaria', 'M'], ['Denmark', 'M'], ['Estonia', 'M'],
+    ['Latvia', 'M'], ['Lithuania', 'M'], ['Serbia', 'M'], ['Croatia', 'M'],
+    ['Paraguay', 'M'], ['Uruguay', 'M'], ['Ecuador', 'M'], ['Guyana', 'M'], ['Suriname', 'M'],
+    ['Panama', 'M'], ['Nicaragua', 'M'], ['Honduras', 'M'], ['Guatemala', 'M'],
+    ['Dominican Republic', 'M', 'Dominican Rep.'], ['Jamaica', 'M'],
+
+    // ── Hard ──
+    ['Andorra', 'H'], ['Monaco', 'H'], ['Liechtenstein', 'H'], ['San Marino', 'H'],
+    ['Vatican City', 'H', 'Vatican'], ['Malta', 'H'], ['Luxembourg', 'H'], ['Slovenia', 'H'],
+    ['Slovakia', 'H'], ['Bosnia and Herzegovina', 'H', 'Bosnia and Herz.'], ['Montenegro', 'H'],
+    ['Albania', 'H'], ['North Macedonia', 'H', 'Macedonia'], ['Kosovo', 'H'], ['Moldova', 'H'],
+    ['Armenia', 'H'], ['Cyprus', 'H'], ['Lebanon', 'H'], ['Palestine', 'H'], ['Kuwait', 'H'],
+    ['Qatar', 'H'], ['Bahrain', 'H'], ['Bhutan', 'H'], ['Brunei', 'H'], ['Singapore', 'H'],
+    ['Timor-Leste', 'H'], ['Maldives', 'H'],
+    ['Haiti', 'H'], ['Belize', 'H'], ['El Salvador', 'H'], ['Costa Rica', 'H'], ['Bahamas', 'H'],
+    ['Barbados', 'H'], ['Trinidad and Tobago', 'H'], ['Grenada', 'H'], ['Saint Lucia', 'H'],
+    ['Saint Vincent and the Grenadines', 'H', 'St. Vin. and Gren.'],
+    ['Antigua and Barbuda', 'H', 'Antigua and Barb.'], ['Dominica', 'H'],
+    ['Saint Kitts and Nevis', 'H', 'St. Kitts and Nevis'],
+    ['Gambia', 'H'], ['Guinea-Bissau', 'H'], ['Sierra Leone', 'H'], ['Liberia', 'H'], ['Togo', 'H'],
+    ['Benin', 'H'], ['Equatorial Guinea', 'H', 'Eq. Guinea'],
+    ['São Tomé and Príncipe', 'H', 'São Tomé and Principe'], ['Cape Verde', 'H', 'Cabo Verde'],
+    ['Rwanda', 'H'], ['Burundi', 'H'], ['Djibouti', 'H'], ['Eswatini', 'H', 'eSwatini'],
+    ['Lesotho', 'H'], ['Comoros', 'H'], ['Mauritius', 'H'], ['Seychelles', 'H'],
+    ['Fiji', 'H'], ['Solomon Islands', 'H', 'Solomon Is.'], ['Vanuatu', 'H'], ['Samoa', 'H'],
+    ['Tonga', 'H'], ['Kiribati', 'H'], ['Nauru', 'H'], ['Palau', 'H'],
+    ['Marshall Islands', 'H', 'Marshall Is.'], ['Micronesia', 'H'],
+  ].map(([name, tier, atlas]) => ({ name, tier, atlas: atlas || name }));
+
+  // Extra atlas shapes that count as part of a target country
+  const ALIASES = {
+    'Somalia': ['Somaliland'], 'Cyprus': ['N. Cyprus'], 'Finland': ['Åland'],
+    'China': ['Hong Kong', 'Macao'], 'United Kingdom': ['Isle of Man', 'Jersey', 'Guernsey'],
+  };
+
+  // Friendlier names for non-target atlas features ("You tapped …")
+  const ATLAS_DISPLAY = {
+    'W. Sahara': 'Western Sahara', 'Faeroe Is.': 'the Faroe Islands', 'Falkland Is.': 'the Falkland Islands',
+    'Fr. Polynesia': 'French Polynesia', 'Fr. S. Antarctic Lands': 'the French Southern Lands',
+    'Cayman Is.': 'the Cayman Islands', 'British Virgin Is.': 'the British Virgin Islands',
+    'U.S. Virgin Is.': 'the U.S. Virgin Islands', 'Turks and Caicos Is.': 'Turks and Caicos',
+    'N. Mariana Is.': 'the Northern Mariana Islands', 'Cook Is.': 'the Cook Islands',
+    'Pitcairn Is.': 'the Pitcairn Islands', 'S. Geo. and the Is.': 'South Georgia',
+    'Heard I. and McDonald Is.': 'Heard Island', 'Br. Indian Ocean Ter.': 'the British Indian Ocean Territory',
+    'Wallis and Futuna Is.': 'Wallis and Futuna', 'St. Pierre and Miquelon': 'Saint Pierre and Miquelon',
+    'Ashmore and Cartier Is.': 'the Ashmore and Cartier Islands', 'Indian Ocean Ter.': 'an Australian Indian Ocean territory',
+    'Siachen Glacier': 'the Siachen Glacier', 'Antarctica': 'Antarctica',
+  };
+
+  const TIER_EMOJI = { E: '🟩', M: '🟧', H: '🟥' };
+
+  // ═══════════════════════════════════════════════════════════════
+  // DAILY SEQUENCE
+  // ═══════════════════════════════════════════════════════════════
+
+  // Mulberry32 PRNG — deterministic, seeded
+  function mulberry32(seed) {
+    return function() {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function getDayIndex() {
+    const n = new Date();
+    return Math.max(0, Math.floor(
+      (Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()) - LAUNCH_UTC) / 86400000
+    ));
+  }
+
+  // Difficulty ramp: round 1 is always easy, rounds 2–3 never hard, then it
+  // gets steadily harder. No more than two easies in a row, so nobody spends
+  // the first five minutes tapping on Russia and Brazil.
+  function tierWeights(round) {
+    if (round === 0) return { E: 1, M: 0, H: 0 };
+    if (round <= 2)  return { E: 0.4, M: 0.6, H: 0 };
+    if (round <= 7)  return { E: 0.25, M: 0.5, H: 0.25 };
+    if (round <= 14) return { E: 0.15, M: 0.45, H: 0.4 };
+    return { E: 0.1, M: 0.35, H: 0.55 };
+  }
+
+  function buildSequence(seed) {
+    const rand = mulberry32(seed);
+    const pools = { E: [], M: [], H: [] };
+    COUNTRIES.forEach((c, i) => pools[c.tier].push(i));
+    const seq = [];
+    while (seq.length < COUNTRIES.length) {
+      const round = seq.length;
+      const w = { ...tierWeights(round) };
+      const prev2 = seq.slice(-2).map(i => COUNTRIES[i].tier);
+      if (round > 0 && prev2.length === 2 && prev2.every(t => t === 'E')) w.E = 0;
+      Object.keys(w).forEach(t => { if (!pools[t].length) w[t] = 0; });
+      let total = w.E + w.M + w.H;
+      if (total === 0) { // constraints exhausted — take whatever is left
+        Object.keys(w).forEach(t => w[t] = pools[t].length ? 1 : 0);
+        total = w.E + w.M + w.H;
+      }
+      let r = rand() * total, tier;
+      for (const t of ['E', 'M', 'H']) {
+        if (w[t] <= 0) continue;
+        tier = t;
+        if ((r -= w[t]) < 0) break;
+      }
+      const pool = pools[tier];
+      seq.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+    }
+    return seq;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GEOMETRY
+  // ═══════════════════════════════════════════════════════════════
+
+  const EARTH_KM = 6371;
+  let ALL_FEATURES = []; // { name, geometry, bounds }
+  let TARGET_SHAPES = []; // per COUNTRIES index: { geometry, bounds, areaKm2, tolKm }
+
+  // Insert points along long edges so d3's great-circle edges match the
+  // straight lines MapLibre draws (e.g. the 49th parallel).
+  function densifyRing(ring, step = 0.25) {
+    const out = [];
+    for (let i = 0; i < ring.length - 1; i++) {
+      const [x1, y1] = ring[i], [x2, y2] = ring[i + 1];
+      out.push(ring[i]);
+      if (Math.abs(x2 - x1) > 180) continue; // antimeridian cut — d3 treats it as a short hop
+      const n = Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / step);
+      for (let k = 1; k < n; k++) out.push([x1 + (x2 - x1) * k / n, y1 + (y2 - y1) * k / n]);
+    }
+    out.push(ring[ring.length - 1]);
+    return out;
+  }
+
+  function densify(geom) {
+    if (geom.type === 'Polygon') return { type: 'Polygon', coordinates: geom.coordinates.map(r => densifyRing(r)) };
+    if (geom.type === 'MultiPolygon') return { type: 'MultiPolygon', coordinates: geom.coordinates.map(p => p.map(r => densifyRing(r))) };
+    return geom;
+  }
+
+  // MapLibre draws rings literally, so a ring that hops 180 → -180 would streak
+  // across the globe. Shift its western half by +360 so it stays contiguous.
+  function forDisplay(geom) {
+    const fix = ring => {
+      for (let i = 0; i < ring.length - 1; i++) {
+        if (Math.abs(ring[i + 1][0] - ring[i][0]) > 180) return ring.map(([x, y]) => [x < 0 ? x + 360 : x, y]);
+      }
+      return ring;
+    };
+    if (geom.type === 'Polygon') return { type: 'Polygon', coordinates: geom.coordinates.map(fix) };
+    return { type: 'MultiPolygon', coordinates: geom.coordinates.map(p => p.map(fix)) };
+  }
+
+  function inBounds(lon, lat, b, pad = 0.5) {
+    if (lat < b[0][1] - pad || lat > b[1][1] + pad) return false;
+    const w = b[0][0] - pad, e = b[1][0] + pad;
+    return w <= e ? (lon >= w && lon <= e) : (lon >= w || lon <= e);
+  }
+
+  function shapeContains(shape, lon, lat) {
+    return inBounds(lon, lat, shape.bounds) && d3.geoContains(shape.geometry, [lon, lat]);
+  }
+
+  function distanceKm(shape, lon, lat) {
+    if (shapeContains(shape, lon, lat)) return 0;
+    let min = Infinity;
+    const visit = ring => ring.forEach(pt => { const d = d3.geoDistance(pt, [lon, lat]); if (d < min) min = d; });
+    const g = shape.geometry;
+    if (g.type === 'Polygon') g.coordinates.forEach(visit);
+    else g.coordinates.forEach(p => p.forEach(visit));
+    return min * EARTH_KM;
+  }
+
+  async function loadShapes() {
+    const topo = await (await fetch(ATLAS_URL)).json();
+    const geoms = topo.objects.countries.geometries;
+    const byName = {};
+    geoms.forEach(g => byName[g.properties.name] = g);
+
+    ALL_FEATURES = topojson.feature(topo, topo.objects.countries).features.map(f => {
+      const geometry = densify(f.geometry);
+      return { name: f.properties.name, geometry, display: forDisplay(geometry), bounds: d3.geoBounds(geometry) };
+    });
+
+    TARGET_SHAPES = COUNTRIES.map(c => {
+      const parts = [c.atlas, ...(ALIASES[c.name] || [])].map(n => byName[n]).filter(Boolean);
+      if (!parts.length) { console.warn('Missing atlas shape for', c.name); return null; }
+      const geometry = densify(parts.length > 1 ? topojson.merge(topo, parts) : topojson.feature(topo, parts[0]).geometry);
+      const areaKm2 = d3.geoArea(geometry) * EARTH_KM * EARTH_KM;
+      // Wiggle room for microstates and island nations
+      // (plus a few km for everyone, since 1:50m coastlines are generalized)
+      const tolKm = areaKm2 < 3000 ? 60 : areaKm2 < 30000 ? 35 : 8;
+      return { geometry, display: forDisplay(geometry), bounds: d3.geoBounds(geometry), areaKm2, tolKm };
+    });
+  }
+
+  function whatIsAt(lon, lat) {
+    // Prefer target countries (handles aliases) before raw atlas features
+    for (let i = 0; i < COUNTRIES.length; i++) {
+      if (TARGET_SHAPES[i] && shapeContains(TARGET_SHAPES[i], lon, lat)) return { name: COUNTRIES[i].name, idx: i };
+    }
+    for (const f of ALL_FEATURES) {
+      if (inBounds(lon, lat, f.bounds) && d3.geoContains(f.geometry, [lon, lat])) {
+        return { name: ATLAS_DISPLAY[f.name] || f.name, feature: f };
+      }
+    }
+    return null;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // STORAGE
+  // ═══════════════════════════════════════════════════════════════
+
+  const STORE_KEY    = 'maptapstreaks_v1';
+  const VISITED_KEY  = 'maptapstreaks_visited';
+  const SETTINGS_KEY = 'maptapstreaks_settings';
+  const progressKey  = d => `maptapstreaks_progress_${d}`;
+  const postedKey    = d => `maptapstreaks_posted_${d}`;
+
+  function lsGet(k, fallback) {
+    try { const v = localStorage.getItem(k); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
+  }
+  function lsSet(k, v) {
+    if (TEST_MODE) return;
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+  }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch {} }
+
+  function loadHistory() { return lsGet(STORE_KEY, []); }
+
+  function saveResult(entry) {
+    if (TEST_MODE) return;
+    const h = loadHistory();
+    const i = h.findIndex(e => e.dayIndex === entry.dayIndex);
+    if (i >= 0) h[i] = entry; else h.unshift(entry);
+    lsSet(STORE_KEY, h.slice(0, 365));
+  }
+
+  function computeDayStreak(dayIndex) {
+    const days = new Set(loadHistory().map(e => e.dayIndex));
+    let streak = 0;
+    for (let d = dayIndex; days.has(d); d--) streak++;
+    return streak;
+  }
+
+  function getSettings() { return { mode: 'hold', ...lsGet(SETTINGS_KEY, {}) }; }
+  function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {} }
+
+  // ═══════════════════════════════════════════════════════════════
+  // UI HELPERS
+  // ═══════════════════════════════════════════════════════════════
+
+  const $ = id => document.getElementById(id);
+
+  function setState(s) { document.body.setAttribute('data-state', s); }
+
+  function showToast(msg, ms = 2600) {
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  function openModal(id)  { $(id).classList.add('open'); }
+  function closeModal(id) { $(id).classList.remove('open'); }
+
+  function retrigger(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+  function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  // ═══════════════════════════════════════════════════════════════
+  // MAP
+  // ═══════════════════════════════════════════════════════════════
+
+  let map;
+  let pinMarker = null;
+  let missMarker = null;
+  let targetRing = null;
+
+  function fitZoom(freeH = innerHeight - 160) {
+    const m = Math.min(innerWidth, freeH);
+    return Math.max(0, Math.log2(Math.max(m, 200) * 0.9 * Math.PI / 512));
+  }
+
+  function initMap() {
+    map = new maplibregl.Map({
+      container: 'map',
+      style: {
+        version: 8,
+        projection: { type: 'globe' },
+        sources: {
+          sat: {
+            type: 'raster', tiles: [SAT_TILES], tileSize: 256, maxzoom: 8,
+            attribution: 'Imagery © NASA Blue Marble via GIBS',
+          },
+          flash:  { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+          reveal: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+        },
+        layers: [
+          { id: 'sat', type: 'raster', source: 'sat' },
+          { id: 'reveal-fill', type: 'fill', source: 'reveal',
+            paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['get', 'fillOpacity'] } },
+          { id: 'reveal-line', type: 'line', source: 'reveal',
+            paint: { 'line-color': ['get', 'color'], 'line-width': ['get', 'width'], 'line-opacity': ['get', 'lineOpacity'] } },
+          { id: 'flash-fill', type: 'fill', source: 'flash',
+            paint: { 'fill-color': '#4cdf8a', 'fill-opacity': 0 } },
+          { id: 'flash-line', type: 'line', source: 'flash',
+            paint: { 'line-color': '#4cdf8a', 'line-width': 2.5, 'line-opacity': 0 } },
+        ],
+      },
+      center: [12, 22],
+      zoom: fitZoom(),
+      minZoom: 0,
+      maxZoom: 10,
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
+      maxPitch: 0,
+      attributionControl: false,
+    });
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-right');
+    map.once('load', () => { // start the attribution collapsed to the ⓘ button
+      const a = document.querySelector('.maplibregl-ctrl-attrib');
+      if (a) { a.classList.remove('maplibregl-compact-show'); a.removeAttribute('open'); }
+    });
+    map.touchZoomRotate.disableRotation();
+    map.keyboard.disableRotation();
+    return new Promise(res => map.on('load', res));
+  }
+
+  // Outline that briefly shows the country you just found, then fades away
+  let flashAnim = 0;
+  function flashCountry(geometry) {
+    map.getSource('flash').setData({ type: 'Feature', geometry, properties: {} });
+    cancelAnimationFrame(flashAnim);
+    const start = performance.now(), HOLD = 450, FADE = 900;
+    const step = now => {
+      const t = now - start;
+      const k = t < HOLD ? 1 : Math.max(0, 1 - (t - HOLD) / FADE);
+      map.setPaintProperty('flash-fill', 'fill-opacity', 0.35 * k);
+      map.setPaintProperty('flash-line', 'line-opacity', k);
+      if (k > 0) flashAnim = requestAnimationFrame(step);
+    };
+    flashAnim = requestAnimationFrame(step);
+  }
+
+  function clearFlash() {
+    cancelAnimationFrame(flashAnim);
+    map.setPaintProperty('flash-fill', 'fill-opacity', 0);
+    map.setPaintProperty('flash-line', 'line-opacity', 0);
+  }
+
+  function setReveal(features) {
+    map.getSource('reveal').setData({ type: 'FeatureCollection', features });
+  }
+
+  function makePin(cls) {
+    const el = document.createElement('div');
+    el.className = 'tap-pin' + (cls ? ' ' + cls : '');
+    return el;
+  }
+
+  function clearPin() { if (pinMarker) { pinMarker.remove(); pinMarker = null; } $('btn-confirm').disabled = true; }
+
+  // Screen point → lng/lat, or null if the point is off the globe (in space)
+  function lngLatAt(x, y) {
+    const ll = map.unproject([x, y]);
+    if (!ll || !isFinite(ll.lng) || !isFinite(ll.lat)) return null;
+    const back = map.project(ll);
+    if (Math.hypot(back.x - x, back.y - y) > 4) return null;
+    return ll;
+  }
+
+  function containerPoint(e) {
+    const r = map.getCanvasContainer().getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  // Slow spin on the start screen
+  let spinning = false;
+  function startSpin() {
+    if (spinning) return;
+    spinning = true;
+    let last = performance.now();
+    const step = now => {
+      if (!spinning) return;
+      const dt = now - last; last = now;
+      if (!map.isMoving()) {
+        const c = map.getCenter();
+        map.setCenter([c.lng + dt * 0.004, c.lat]);
+      }
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  function stopSpin() { spinning = false; }
+
+  // ═══════════════════════════════════════════════════════════════
+  // INPUT — press & hold (default) or tap + confirm
+  // ═══════════════════════════════════════════════════════════════
+
+  let settings = getSettings();
+  const pointers = new Map();
+  let hold = null; // { id, x, y, timer }
+  const ring = $('hold-ring');
+  ring.style.setProperty('--hold-ms', HOLD_MS + 'ms');
+
+  function canGuess() { return document.body.dataset.state === 'playing' && game && game.accepting; }
+
+  function cancelHold() {
+    if (!hold) return;
+    clearTimeout(hold.timer);
+    hold = null;
+    ring.classList.remove('show', 'filling');
+  }
+
+  function initInput() {
+    const el = map.getCanvasContainer();
+    el.addEventListener('contextmenu', e => e.preventDefault());
+
+    el.addEventListener('pointerdown', e => {
+      pointers.set(e.pointerId, e);
+      if (pointers.size > 1) { cancelHold(); return; }
+      if (settings.mode !== 'hold' || !canGuess()) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const p = containerPoint(e);
+      if (!lngLatAt(p.x, p.y)) return;
+      cancelHold();
+      ring.style.left = e.clientX + 'px';
+      ring.style.top = e.clientY + 'px';
+      ring.classList.add('show');
+      void ring.getBoundingClientRect();
+      ring.classList.add('filling');
+      hold = {
+        id: e.pointerId, x: e.clientX, y: e.clientY, p,
+        timer: setTimeout(() => {
+          const h = hold;
+          cancelHold();
+          if (!h || !canGuess()) return;
+          const ll = lngLatAt(h.p.x, h.p.y);
+          if (!ll) return;
+          if (navigator.vibrate) { try { navigator.vibrate(15); } catch {} }
+          submitGuess(ll);
+        }, HOLD_MS),
+      };
+    });
+
+    el.addEventListener('pointermove', e => {
+      if (hold && e.pointerId === hold.id && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > MOVE_CANCEL_PX) cancelHold();
+    });
+
+    const up = e => { pointers.delete(e.pointerId); if (hold && e.pointerId === hold.id) cancelHold(); };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') up(e); });
+    map.on('zoomstart', cancelHold);
+    map.on('dragstart', cancelHold);
+
+    // Tap + confirm: MapLibre only fires click when the map wasn't dragged
+    map.on('click', e => {
+      if (settings.mode !== 'tap' || !canGuess()) return;
+      const ll = lngLatAt(e.point.x, e.point.y);
+      if (!ll) return;
+      if (!pinMarker) pinMarker = new maplibregl.Marker({ element: makePin() }).setLngLat(ll).addTo(map);
+      else pinMarker.setLngLat(ll);
+      $('btn-confirm').disabled = false;
+    });
+    $('btn-confirm').onclick = () => {
+      if (!pinMarker || !canGuess()) return;
+      const ll = pinMarker.getLngLat();
+      clearPin();
+      submitGuess(ll);
+    };
+  }
+
+  function applyMode() {
+    document.body.classList.toggle('mode-tap', settings.mode === 'tap');
+    document.querySelectorAll('#modal-settings .opt').forEach(o => {
+      const sel = o.dataset.mode === settings.mode;
+      o.classList.toggle('sel', sel);
+      o.querySelector('input').checked = sel;
+    });
+    $('start-mode-desc').textContent = settings.mode === 'tap'
+      ? 'Tap to drop a pin, then confirm your guess.'
+      : 'Press & hold on a spot until the ring fills to guess.';
+    if (settings.mode !== 'tap') clearPin();
+    cancelHold();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GAME
+  // ═══════════════════════════════════════════════════════════════
+
+  let game = null;
+  // { dayIndex, puzzleNum, seq, round, found: [idx], missed: idx|null, tapped: {lng,lat,name}|null, accepting }
+
+  function currentTarget() { return game.seq[game.round]; }
+
+  function saveProgress() {
+    if (TEST_MODE) return;
+    lsSet(progressKey(game.dayIndex), { found: game.found });
+  }
+
+  function newGame() {
+    const dayIndex = getDayIndex();
+    const seed = TEST_MODE ? Math.floor(Math.random() * 2 ** 31) : (SEED_BASE ^ (dayIndex * 2654435761)) >>> 0;
+    const seq = buildSequence(seed).filter(i => TARGET_SHAPES[i]);
+    game = { dayIndex, puzzleNum: dayIndex + 1, seq, round: 0, found: [], missed: null, tapped: null, accepting: false };
+    // Resume an in-progress run (refreshing doesn't give you a fresh try)
+    const prog = TEST_MODE ? null : lsGet(progressKey(dayIndex), null);
+    if (prog && Array.isArray(prog.found)) {
+      game.found = prog.found.slice(0, seq.length);
+      game.round = game.found.length;
+    }
+    return game;
+  }
+
+  function showPrompt() {
+    const c = COUNTRIES[currentTarget()];
+    const el = $('prompt-country');
+    el.textContent = c.name;
+    retrigger(el, 'pop');
+    $('prompt-dot').className = 'dot ' + c.tier;
+    $('prompt-label-text').textContent = `Find · #${game.round + 1}`;
+    $('streak-num').textContent = game.found.length;
+    $('prompt').classList.remove('flash-good', 'flash-bad');
+    game.accepting = true;
+  }
+
+  function startPlaying() {
+    stopSpin();
+    setReveal([]);
+    clearFlash();
+    if (missMarker) { missMarker.remove(); missMarker = null; }
+    if (targetRing) { targetRing.remove(); targetRing = null; }
+    setState('playing');
+    showPrompt();
+    padForCard($('prompt'));
+  }
+
+  function submitGuess(ll) {
+    if (!game.accepting) return;
+    game.accepting = false;
+    const targetIdx = currentTarget();
+    const shape = TARGET_SHAPES[targetIdx];
+    const d = distanceKm(shape, ll.lng, ll.lat);
+    const correct = d <= shape.tolKm;
+
+    if (correct) {
+      game.found.push(targetIdx);
+      game.round++;
+      saveProgress();
+      flashCountry(shape.display);
+      retrigger($('prompt'), 'flash-good');
+      const sn = $('streak-num');
+      sn.textContent = game.found.length;
+      retrigger(sn, 'bump');
+      if (game.round >= game.seq.length) { setTimeout(() => finishGame(true), 900); return; }
+      setTimeout(showPrompt, 650);
+    } else {
+      const hit = whatIsAt(ll.lng, ll.lat);
+      game.missed = targetIdx;
+      game.tapped = { lng: ll.lng, lat: ll.lat, name: hit ? hit.name : null };
+      showMiss(ll, hit);
+    }
+  }
+
+  function showMiss(ll, hit) {
+    const target = COUNTRIES[game.missed];
+    const shape = TARGET_SHAPES[game.missed];
+    const feats = [];
+    if (hit) {
+      const g = hit.idx !== undefined ? TARGET_SHAPES[hit.idx].display : hit.feature.display;
+      feats.push({ type: 'Feature', geometry: g, properties: { color: '#ffffff', fillOpacity: 0.08, width: 1.5, lineOpacity: 0.6 } });
+    }
+    feats.push({ type: 'Feature', geometry: shape.display, properties: { color: '#ff5a5a', fillOpacity: 0.35, width: 2.5, lineOpacity: 1 } });
+    setReveal(feats);
+    if (missMarker) missMarker.remove();
+    missMarker = new maplibregl.Marker({ element: makePin('miss') }).setLngLat(ll).addTo(map);
+    if (targetRing) { targetRing.remove(); targetRing = null; }
+    if (shape.areaKm2 < 30000) { // tiny countries are hard to spot — circle them
+      const el = document.createElement('div'); // MapLibre owns the outer transform
+      el.innerHTML = '<div class="target-ring"></div>';
+      targetRing = new maplibregl.Marker({ element: el }).setLngLat(d3.geoCentroid(shape.geometry)).addTo(map);
+    }
+
+    const tappedTxt = hit ? `That was <strong>${escapeHtml(hit.name)}</strong>.` : `That was the <strong>ocean</strong>.`;
+    $('miss-msg').innerHTML = `❌ ${tappedTxt} <strong>${escapeHtml(target.name)}</strong> is outlined in red.`;
+    $('prompt-label-text').textContent = 'Run over';
+    retrigger($('prompt'), 'flash-bad');
+    setState('missed');
+    map.setPadding({ top: 56, bottom: $('prompt').getBoundingClientRect().height + 16, left: 0, right: 0 });
+    focusOn(shape, ll);
+
+    finishGame(false, true);
+  }
+
+  // Fly to the missed country; keep the tap in frame too if it was nearby
+  function focusOn(shape, ll) {
+    const b = shape.bounds;
+    let w = b[0][0], e = b[1][0];
+    if (w > e) e += 360; // crosses the antimeridian
+    let s = b[0][1], n = b[1][1];
+    let lng = ll.lng;
+    if (lng < w - 180) lng += 360;
+    if (lng > e + 180) lng -= 360;
+    const W = Math.min(w, lng), E = Math.max(e, lng), S = Math.min(s, ll.lat), N = Math.max(n, ll.lat);
+    if (E - W < 50 && N - S < 35) { w = W; e = E; s = S; n = N; }
+    map.fitBounds([[w, s], [e, n]], {
+      padding: { top: 80, bottom: 60, left: 40, right: 40 },
+      maxZoom: 5.5, duration: 1400,
+    });
+  }
+
+  // Keep the globe centered in the space the bottom card leaves free
+  function padForCard(el, animate = true) {
+    const h = el && el.offsetParent !== null ? el.getBoundingClientRect().height + 16 : 0;
+    const padding = { top: 56, bottom: h, left: 0, right: 0 };
+    if (animate) map.easeTo({ padding, duration: 400 }); else map.setPadding(padding);
+  }
+
+  function finishGame(perfect, deferShow) {
+    const entry = {
+      dayIndex: game.dayIndex,
+      puzzleNum: game.puzzleNum,
+      score: game.found.length,
+      tiers: game.found.map(i => COUNTRIES[i].tier).join(''),
+      found: game.found.map(i => COUNTRIES[i].name),
+      missed: game.missed !== null ? { name: COUNTRIES[game.missed].name, tier: COUNTRIES[game.missed].tier } : null,
+      tapped: game.tapped ? game.tapped.name : null,
+      perfect: !!perfect,
+    };
+    game._entry = entry; // test mode doesn't save, so "See results" reads it from here
+    saveResult(entry);
+    lsDel(progressKey(game.dayIndex));
+    postScore(game.dayIndex, entry.score);
+    if (!deferShow) showResults(entry);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // RESULTS & SHARE
+  // ═══════════════════════════════════════════════════════════════
+
+  function squaresFor(entry, perLine = 10) {
+    const sq = [...entry.tiers].map(t => TIER_EMOJI[t]);
+    if (entry.missed) sq.push('❌');
+    const lines = [];
+    for (let i = 0; i < sq.length; i += perLine) lines.push(sq.slice(i, i + perLine).join(''));
+    return lines.join('\n');
+  }
+
+  function buildShareText(entry) {
+    const head = TEST_MODE ? '🌍 Map Tap Streaks (practice)' : `🌍 Map Tap Streaks #${entry.puzzleNum}`;
+    const score = entry.perfect ? `🏆 Perfect run: ${entry.score}!` : `🔥 Streak: ${entry.score}`;
+    return `${head}\n${score}\n${squaresFor(entry)}\n${SHARE_URL}`;
+  }
+
+  function share(text) {
+    if (navigator.share) {
+      navigator.share({ text }).catch(err => { if (err && err.name !== 'AbortError') copyText(text); });
+    } else {
+      copyText(text);
+    }
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!'));
+    } else {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Copied to clipboard!');
+    }
+  }
+
+  const SUBS = [
+    [0,  'Rough start. The globe is big.'],
+    [1,  'On the board!'],
+    [4,  'Solid warm-up.'],
+    [8,  'Nice streak!'],
+    [13, 'Geography whiz.'],
+    [20, 'Cartographer-level.'],
+    [30, 'Are you a satellite?'],
+    [50, 'Legendary.'],
+  ];
+
+  function showResults(entry) {
+    $('res-label').textContent = TEST_MODE ? 'Practice streak' : `Puzzle #${entry.puzzleNum} streak`;
+    $('res-score').textContent = entry.score;
+    let sub = SUBS[0][1];
+    SUBS.forEach(([n, s]) => { if (entry.score >= n) sub = s; });
+    $('res-sub').textContent = entry.perfect ? 'You found every single country. Wow.' : sub;
+    $('res-grid').textContent = squaresFor(entry);
+
+    const list = $('found-list');
+    list.innerHTML = '';
+    entry.found.forEach((name, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = `<i class="dot ${entry.tiers[i]}"></i>${escapeHtml(name)}`;
+      list.appendChild(chip);
+    });
+    if (entry.missed) {
+      const chip = document.createElement('span');
+      chip.className = 'chip missed';
+      chip.innerHTML = `❌ <i class="dot ${entry.missed.tier}"></i>${escapeHtml(entry.missed.name)}`
+        + (entry.tapped ? ` <span style="color:var(--text-dim)">(tapped ${escapeHtml(entry.tapped)})</span>` : '');
+      list.appendChild(chip);
+    }
+
+    const hist = loadHistory();
+    const scores = hist.map(e => e.score);
+    $('st-played').textContent = scores.length;
+    $('st-best').textContent = scores.length ? Math.max(...scores) : 0;
+    $('st-avg').textContent = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
+    $('st-days').textContent = computeDayStreak(entry.dayIndex);
+
+    $('btn-share').onclick = () => share(buildShareText(entry));
+    $('btn-play-again').style.display = TEST_MODE ? '' : 'none';
+    $('next-in').style.display = TEST_MODE ? 'none' : '';
+    $('btn-view-map').style.display = game && game.missed !== null ? '' : 'none';
+
+    loadCommunityStats(entry.dayIndex, entry.score);
+    setState('result');
+  }
+
+  function tickCountdown() {
+    const now = Date.now();
+    const next = Math.floor(now / 86400000) * 86400000 + 86400000;
+    const s = Math.max(0, Math.floor((next - now) / 1000));
+    const pad = n => String(n).padStart(2, '0');
+    $('next-in').innerHTML = `Next puzzle in <strong>${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}</strong>`;
+  }
+
+  function renderHistory() {
+    const hist = loadHistory();
+    const el = $('hist-list');
+    el.innerHTML = '';
+    if (!hist.length) {
+      el.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem">No games yet — play your first!</p>';
+      return;
+    }
+    hist.slice(0, 60).forEach(e => {
+      const item = document.createElement('div');
+      item.className = 'hist-item';
+      item.innerHTML = `<div class="hi-num">#${e.puzzleNum}</div>
+        <div class="hi-grid">${[...e.tiers].map(t => TIER_EMOJI[t]).join('')}${e.missed ? '❌' : ''}</div>
+        <div class="hi-score">${e.score}</div>`;
+      el.appendChild(item);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COMMUNITY STATS (Supabase)
+  // ═══════════════════════════════════════════════════════════════
+
+  const BUCKETS = [
+    { label: '0',     test: n => n === 0 },
+    { label: '1–4',   test: n => n >= 1 && n <= 4 },
+    { label: '5–9',   test: n => n >= 5 && n <= 9 },
+    { label: '10–19', test: n => n >= 10 && n <= 19 },
+    { label: '20+',   test: n => n >= 20 },
+  ];
+
+  function postScore(dayIndex, score) {
+    if (!SUPABASE_URL || TEST_MODE || lsGet(postedKey(dayIndex), false)) return;
+    fetch(`${SUPABASE_URL}/rest/v1/scores`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ day_index: dayIndex + STATS_DAY_OFFSET, grade: String(score) })
+    }).then(r => { if (r.ok) lsSet(postedKey(dayIndex), true); }).catch(() => {});
+  }
+
+  async function loadCommunityStats(dayIndex, myScore) {
+    const wrap = $('community');
+    if (!SUPABASE_URL || TEST_MODE) { wrap.style.display = 'none'; return; }
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/scores?day_index=eq.${dayIndex + STATS_DAY_OFFSET}&select=grade`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (!res.ok) throw new Error(res.status);
+      const scores = (await res.json()).map(r => parseInt(r.grade, 10)).filter(n => !isNaN(n));
+      if (!scores.length) { wrap.style.display = 'none'; return; }
+      const chart = $('community-chart');
+      chart.innerHTML = '';
+      BUCKETS.forEach(b => {
+        const n = scores.filter(b.test).length;
+        const pct = Math.round(n / scores.length * 100);
+        const row = document.createElement('div');
+        row.className = 'community-row';
+        row.innerHTML = `<div class="community-lbl">${b.label}</div>
+          <div class="community-bar-bg"><div class="community-bar ${b.test(myScore) ? 'player' : ''}" style="width:${n ? Math.max(pct, 5) : 0}%"></div></div>
+          <div class="community-pct">${pct}% (${n})</div>`;
+        chart.appendChild(row);
+      });
+      const others = scores.length - 1;
+      const beat = scores.filter(s => s < myScore).length;
+      $('community-note').textContent = others > 0
+        ? `${scores.length} players today · you beat ${Math.round(beat / scores.length * 100)}% of them`
+        : `${scores.length} player today`;
+      wrap.style.display = '';
+    } catch {
+      wrap.style.display = 'none';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BOOT
+  // ═══════════════════════════════════════════════════════════════
+
+  function showStart() {
+    const resumed = game.found.length > 0;
+    $('start-sub').textContent = TEST_MODE ? 'Practice mode' : `Daily puzzle #${game.puzzleNum}`;
+    $('btn-start').textContent = resumed ? `Resume (streak ${game.found.length})` : 'Start';
+    setState('start');
+    const card = document.querySelector('.start-card');
+    padForCard(card, false);
+    map.jumpTo({ zoom: fitZoom(innerHeight - card.getBoundingClientRect().height - 90) });
+    startSpin();
+  }
+
+  async function init() {
+    $('puzzle-num').innerHTML = TEST_MODE
+      ? '<span class="test-badge">Test mode</span>'
+      : `#${getDayIndex() + 1}`;
+
+    // Modals
+    document.querySelectorAll('.overlay').forEach(o => {
+      o.addEventListener('click', e => { if (e.target === o || e.target.hasAttribute('data-close')) o.classList.remove('open'); });
+    });
+    $('btn-help').onclick = () => openModal('modal-help');
+    $('btn-settings').onclick = () => openModal('modal-settings');
+    $('btn-stats').onclick = () => { renderHistory(); openModal('modal-stats'); };
+    document.querySelectorAll('#modal-settings input[name=mode]').forEach(inp => {
+      inp.addEventListener('change', () => { settings.mode = inp.value; saveSettings(settings); applyMode(); });
+    });
+
+    $('btn-start').onclick = () => { lsSet(VISITED_KEY, true); startPlaying(); };
+    $('btn-see-results').onclick = () => {
+      showResults(game._entry);
+    };
+    $('btn-view-map').onclick = () => setState('map');
+    $('btn-back-results').onclick = () => setState('result');
+    $('btn-play-again').onclick = () => { newGame(); startPlaying(); };
+
+    applyMode();
+    tickCountdown();
+    setInterval(tickCountdown, 1000);
+
+    try {
+      await Promise.all([initMap(), loadShapes()]);
+    } catch (err) {
+      console.error(err);
+      $('loading').textContent = 'Could not load the globe. Check your connection and refresh.';
+      return;
+    }
+    initInput();
+    document.body.classList.add('ready');
+
+    newGame();
+
+    const today = TEST_MODE ? null : loadHistory().find(e => e.dayIndex === game.dayIndex);
+    if (today) { showResults(today); startSpin(); return; }
+
+    if (!TEST_MODE && !lsGet(VISITED_KEY, false)) openModal('modal-help');
+    showStart();
+  }
+
+  init();
+</script>
+</body>
+</html>
