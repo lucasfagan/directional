@@ -477,7 +477,7 @@
         <p>Each round names a country. Find it on the satellite globe — there are <strong>no borders and no labels</strong>, just the planet.</p>
         <p>Your score is how many countries you find. You start with a <strong>1,000-mile budget</strong>: miss, and the distance from your guess to the country comes off it. Close misses only cost a little; a wrong-continent guess can end your run on the spot.</p>
         <p>When your miles run out, the run is over.</p>
-        <p>Everyone gets the same countries in the same order. A new puzzle drops every day at <strong>midnight UTC</strong>.</p>
+        <p>Everyone gets the same countries in the same order. A new puzzle drops every day at <strong>midnight Eastern</strong>.</p>
       </div>
       <div class="modal-section">
         <h3>Guessing</h3>
@@ -540,12 +540,16 @@
 
   const SUPABASE_URL = 'https://qnlzjddurxpfszhitreb.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_s0MLm4hC1PUsCwAK4HszUg_lLCQWmau';
-  const STATS_DAY_OFFSET = 200000; // shares the Directional `scores` table (US edition uses +100000)
+  // Shares the Directional `scores` table. 200000 held one-miss-and-out scores;
+  // miles-budget scores use 600000 so the two rule sets don't mix.
+  const STATS_DAY_OFFSET = 600000;
 
   const TEST_MODE = new URLSearchParams(location.search).has('test');
 
   const SEED_BASE  = 161803398;
-  const LAUNCH_UTC = Date.UTC(2026, 9, 17); // Oct 17, 2026 = puzzle #1
+  const LAUNCH_UTC = Date.UTC(2026, 9, 17); // Oct 17, 2026 (Eastern) = puzzle #1
+  const PUZZLE_TZ  = 'America/New_York';     // new puzzle at midnight Eastern
+  const RULES_V2_DAY = 5;                     // Oct 22: miles budget replaced one-miss-and-out
   const HOLD_MS    = 500;
   const MILE_BUDGET = 1000; // total miles of misses allowed per run
   const KM_TO_MI   = 0.621371;
@@ -653,11 +657,19 @@
     };
   }
 
+  // Wall-clock date/time in the puzzle time zone (handles EST/EDT)
+  function tzNow(d = new Date()) {
+    const o = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: PUZZLE_TZ, hourCycle: 'h23',
+      year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
+    }).formatToParts(d).forEach(p => { if (p.type !== 'literal') o[p.type] = +p.value; });
+    return o;
+  }
+
   function getDayIndex() {
-    const n = new Date();
-    return Math.max(0, Math.floor(
-      (Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()) - LAUNCH_UTC) / 86400000
-    ));
+    const t = tzNow();
+    return Math.max(0, Math.floor((Date.UTC(t.year, t.month - 1, t.day) - LAUNCH_UTC) / 86400000));
   }
 
   // Difficulty ramp: round 1 is always easy, rounds 2–3 never hard, then it
@@ -805,7 +817,7 @@
   const VISITED_KEY  = 'maptapstreaks_visited';
   const SETTINGS_KEY = 'maptapstreaks_settings';
   const progressKey  = d => `maptapstreaks_progress_${d}`;
-  const postedKey    = d => `maptapstreaks_posted_${d}`;
+  const postedKey    = d => `maptapstreaks_posted_v2_${d}`;
 
   function lsGet(k, fallback) {
     try { const v = localStorage.getItem(k); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
@@ -817,6 +829,14 @@
   function lsDel(k) { try { localStorage.removeItem(k); } catch {} }
 
   function loadHistory() { return lsGet(STORE_KEY, []); }
+
+  // Runs played under the old one-miss rules on or after the switch day are
+  // cleared, so everyone can replay today's puzzle with the miles budget.
+  function resetOldRuleRuns() {
+    const h = loadHistory();
+    const kept = h.filter(e => e.v === 2 || e.dayIndex < RULES_V2_DAY);
+    if (kept.length !== h.length) lsSet(STORE_KEY, kept);
+  }
 
   function saveResult(entry) {
     if (TEST_MODE) return;
@@ -1385,9 +1405,8 @@
   }
 
   function tickCountdown() {
-    const now = Date.now();
-    const next = Math.floor(now / 86400000) * 86400000 + 86400000;
-    const s = Math.max(0, Math.floor((next - now) / 1000));
+    const t = tzNow();
+    const s = Math.max(0, 86400 - (t.hour * 3600 + t.minute * 60 + t.second));
     const pad = n => String(n).padStart(2, '0');
     $('next-in').innerHTML = `Next puzzle in <strong>${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}</strong>`;
   }
@@ -1486,6 +1505,7 @@
   }
 
   async function init() {
+    resetOldRuleRuns();
     $('puzzle-num').innerHTML = TEST_MODE
       ? '<span class="test-badge">Test mode</span>'
       : `#${getDayIndex() + 1}`;
