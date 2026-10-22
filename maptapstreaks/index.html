@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Map Tap Streaks</title>
-  <meta name="description" content="A daily geography streak game. Find countries on a satellite globe with no borders — how many can you get in a row?">
+  <meta name="description" content="A daily geography streak game. Find countries on a satellite globe with no borders — how many can you find before your miles run out?">
   <meta property="og:title" content="Map Tap Streaks">
-  <meta property="og:description" content="A daily geography streak game. Find countries on a satellite globe with no borders — how many can you get in a row?">
+  <meta property="og:description" content="A daily geography streak game. Find countries on a satellite globe with no borders — how many can you find before your miles run out?">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://directional.global/maptapstreaks">
   <meta property="og:image" content="https://directional.global/og-directional.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Map Tap Streaks">
-  <meta name="twitter:description" content="A daily geography streak game. Find countries on a satellite globe with no borders — how many can you get in a row?">
+  <meta name="twitter:description" content="A daily geography streak game. Find countries on a satellite globe with no borders — how many can you find before your miles run out?">
   <meta name="twitter:image" content="https://directional.global/og-directional.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
@@ -205,6 +205,14 @@
     @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.35); color: var(--good); } 100% { transform: scale(1); } }
     .streak-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); }
     .prompt-hint { font-size: 0.74rem; color: var(--text-dim); margin-top: 6px; }
+    .miles { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+    .miles-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--surface2); overflow: hidden; }
+    .miles-fill { height: 100%; width: 100%; border-radius: 4px; background: var(--good); transition: width 0.5s ease, background 0.3s; }
+    .miles-fill.mid { background: var(--medium); }
+    .miles-fill.low { background: var(--bad); }
+    .miles-txt { font-size: 0.74rem; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .miles-txt strong { color: var(--text); }
+    .miles-txt.hit { animation: bump 400ms ease-out; }
     .prompt-actions { margin-top: 10px; display: none; }
     body.mode-tap[data-state="playing"] .prompt-actions.confirm { display: flex; }
     body.mode-tap .hint-hold { display: none; }
@@ -251,6 +259,7 @@
       border-radius: 8px; padding: 5px 9px; font-size: 0.8rem;
     }
     .chip.missed { border-color: var(--bad); }
+    .chip .off { color: var(--text-dim); }
     .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
     .stat-num { font-size: 1.35rem; font-weight: 800; }
     .stat-lbl { font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -371,7 +380,7 @@
       <div class="start-sub" id="start-sub"></div>
       <p class="start-desc" id="start-desc">
         A country is named. <strong>Find it on the globe</strong> — no borders, no labels.
-        Get as many as you can in a row. <strong>One miss ends your run.</strong>
+        Misses cost the miles you were off — <strong>you get 1,000 miles</strong>. Run out and it's over.
         <br><span id="start-mode-desc"></span>
       </p>
       <div class="tier-legend">
@@ -393,8 +402,12 @@
         </div>
         <div class="streak-box">
           <div class="streak-num" id="streak-num">0</div>
-          <div class="streak-lbl">Streak</div>
+          <div class="streak-lbl">Found</div>
         </div>
+      </div>
+      <div class="miles">
+        <div class="miles-bar"><div class="miles-fill" id="miles-fill"></div></div>
+        <div class="miles-txt" id="miles-txt"></div>
       </div>
       <div class="prompt-hint">
         <span class="hint-hold">Press &amp; hold on the country to guess. Drag &amp; pinch to explore.</span>
@@ -405,6 +418,7 @@
         <button class="btn btn-primary btn-block" id="btn-confirm" disabled>Confirm</button>
       </div>
       <div class="prompt-actions after-miss">
+        <button class="btn btn-primary btn-block" id="btn-next">Next country</button>
         <button class="btn btn-primary btn-block" id="btn-see-results">See results</button>
       </div>
     </div>
@@ -461,7 +475,8 @@
       <div class="modal-section">
         <h3>The game</h3>
         <p>Each round names a country. Find it on the satellite globe — there are <strong>no borders and no labels</strong>, just the planet.</p>
-        <p>Keep going as long as you can. <strong>One miss ends your run</strong>, and your score is how many you got in a row.</p>
+        <p>Your score is how many countries you find. You start with a <strong>1,000-mile budget</strong>: miss, and the distance from your guess to the country comes off it. Close misses only cost a little; a wrong-continent guess can end your run on the spot.</p>
+        <p>When your miles run out, the run is over.</p>
         <p>Everyone gets the same countries in the same order. A new puzzle drops every day at <strong>midnight UTC</strong>.</p>
       </div>
       <div class="modal-section">
@@ -532,6 +547,8 @@
   const SEED_BASE  = 161803398;
   const LAUNCH_UTC = Date.UTC(2026, 9, 17); // Oct 17, 2026 = puzzle #1
   const HOLD_MS    = 500;
+  const MILE_BUDGET = 1000; // total miles of misses allowed per run
+  const KM_TO_MI   = 0.621371;
   const MOVE_CANCEL_PX = 10;
   const SHARE_URL  = 'https://directional.global/maptapstreaks';
 
@@ -1078,27 +1095,42 @@
   // ═══════════════════════════════════════════════════════════════
 
   let game = null;
-  // { dayIndex, puzzleNum, seq, round, found: [idx], missed: idx|null, tapped: {lng,lat,name}|null, accepting }
+  // { dayIndex, puzzleNum, seq, rounds: [{ i, mi, tapped }], accepting, over, lastMiss }
+  // mi = miles off (0 = found). Score = rounds found; the run ends when misses use up MILE_BUDGET.
 
-  function currentTarget() { return game.seq[game.round]; }
+  function currentTarget() { return game.seq[game.rounds.length]; }
+  function foundCount() { return game.rounds.filter(r => r.mi === 0).length; }
+  function milesUsed() { return game.rounds.reduce((t, r) => t + r.mi, 0); }
+  function milesLeft() { return Math.max(0, MILE_BUDGET - milesUsed()); }
 
   function saveProgress() {
     if (TEST_MODE) return;
-    lsSet(progressKey(game.dayIndex), { found: game.found });
+    lsSet(progressKey(game.dayIndex), { rounds: game.rounds });
   }
 
   function newGame() {
     const dayIndex = getDayIndex();
     const seed = TEST_MODE ? Math.floor(Math.random() * 2 ** 31) : (SEED_BASE ^ (dayIndex * 2654435761)) >>> 0;
     const seq = buildSequence(seed).filter(i => TARGET_SHAPES[i]);
-    game = { dayIndex, puzzleNum: dayIndex + 1, seq, round: 0, found: [], missed: null, tapped: null, accepting: false };
+    game = { dayIndex, puzzleNum: dayIndex + 1, seq, rounds: [], accepting: false, over: false, lastMiss: false };
     // Resume an in-progress run (refreshing doesn't give you a fresh try)
     const prog = TEST_MODE ? null : lsGet(progressKey(dayIndex), null);
-    if (prog && Array.isArray(prog.found)) {
-      game.found = prog.found.slice(0, seq.length);
-      game.round = game.found.length;
-    }
+    if (prog && Array.isArray(prog.rounds)) game.rounds = prog.rounds.slice(0, seq.length);
+    else if (prog && Array.isArray(prog.found)) game.rounds = prog.found.slice(0, seq.length).map(i => ({ i, mi: 0, tapped: null }));
     return game;
+  }
+
+  function fmtMi(mi) { return `${Math.round(mi).toLocaleString('en-US')} mi`; }
+
+  function updateMiles(animate) {
+    const left = milesLeft(), frac = left / MILE_BUDGET;
+    const fill = $('miles-fill');
+    fill.style.width = (frac * 100) + '%';
+    fill.classList.toggle('mid', frac <= 0.5 && frac > 0.2);
+    fill.classList.toggle('low', frac <= 0.2);
+    const txt = $('miles-txt');
+    txt.innerHTML = `<strong>${fmtMi(left)}</strong> left`;
+    if (animate) retrigger(txt, 'hit');
   }
 
   function showPrompt() {
@@ -1107,18 +1139,23 @@
     el.textContent = c.name;
     retrigger(el, 'pop');
     $('prompt-dot').className = 'dot ' + c.tier;
-    $('prompt-label-text').textContent = `Find · #${game.round + 1}`;
-    $('streak-num').textContent = game.found.length;
+    $('prompt-label-text').textContent = `Find · #${game.rounds.length + 1}`;
+    $('streak-num').textContent = foundCount();
     $('prompt').classList.remove('flash-good', 'flash-bad');
+    updateMiles(false);
     game.accepting = true;
+  }
+
+  function clearMissReveal() {
+    setReveal([]);
+    if (missMarker) { missMarker.remove(); missMarker = null; }
+    if (targetRing) { targetRing.remove(); targetRing = null; }
   }
 
   function startPlaying() {
     stopSpin();
-    setReveal([]);
+    clearMissReveal();
     clearFlash();
-    if (missMarker) { missMarker.remove(); missMarker = null; }
-    if (targetRing) { targetRing.remove(); targetRing = null; }
     setState('playing');
     showPrompt();
     padForCard($('prompt'));
@@ -1130,30 +1167,32 @@
     const targetIdx = currentTarget();
     const shape = TARGET_SHAPES[targetIdx];
     const d = distanceKm(shape, ll.lng, ll.lat);
-    const correct = d <= shape.tolKm;
 
-    if (correct) {
-      game.found.push(targetIdx);
-      game.round++;
+    if (d <= shape.tolKm) {
+      game.rounds.push({ i: targetIdx, mi: 0, tapped: null });
       saveProgress();
       flashCountry(shape.display, ll);
       retrigger($('prompt'), 'flash-good');
       const sn = $('streak-num');
-      sn.textContent = game.found.length;
+      sn.textContent = foundCount();
       retrigger(sn, 'bump');
-      if (game.round >= game.seq.length) { setTimeout(() => finishGame(true), 900); return; }
+      if (game.rounds.length >= game.seq.length) { setTimeout(() => finishGame(true), 900); return; }
       setTimeout(showPrompt, 650);
     } else {
       const hit = whatIsAt(ll.lng, ll.lat);
-      game.missed = targetIdx;
-      game.tapped = { lng: ll.lng, lat: ll.lat, name: hit ? hit.name : null, km: Math.round(d) };
-      showMiss(ll, hit);
+      // Always cost at least 1 mile so a miss never reads as "0 mi off"
+      const mi = Math.max(1, Math.round(d * KM_TO_MI));
+      game.rounds.push({ i: targetIdx, mi, tapped: hit ? hit.name : null });
+      game.over = milesUsed() >= MILE_BUDGET || game.rounds.length >= game.seq.length;
+      game.lastMiss = true;
+      saveProgress();
+      showMiss(ll, hit, targetIdx, mi);
     }
   }
 
-  function showMiss(ll, hit) {
-    const target = COUNTRIES[game.missed];
-    const shape = TARGET_SHAPES[game.missed];
+  function showMiss(ll, hit, targetIdx, mi) {
+    const target = COUNTRIES[targetIdx];
+    const shape = TARGET_SHAPES[targetIdx];
     const feats = [];
     if (hit) {
       const g = hit.idx !== undefined ? TARGET_SHAPES[hit.idx].display : hit.feature.display;
@@ -1171,14 +1210,25 @@
     }
 
     const tappedTxt = hit ? `That was <strong>${escapeHtml(hit.name)}</strong>.` : `That was the <strong>ocean</strong>.`;
-    $('miss-msg').innerHTML = `❌ ${tappedTxt} <strong>${escapeHtml(target.name)}</strong> is outlined in red — you were <strong>${fmtKm(game.tapped.km)}</strong> away.`;
-    $('prompt-label-text').textContent = 'Run over';
+    const after = game.over && milesUsed() >= MILE_BUDGET ? ' <strong>Out of miles!</strong>' : '';
+    $('miss-msg').innerHTML = `❌ ${tappedTxt} <strong>${escapeHtml(target.name)}</strong> is in red — <strong>${fmtMi(mi)}</strong> off.${after}`;
+    $('prompt-label-text').textContent = game.over ? 'Run over' : `Missed · #${game.rounds.length}`;
+    $('btn-next').style.display = game.over ? 'none' : '';
+    $('btn-see-results').style.display = game.over ? '' : 'none';
     retrigger($('prompt'), 'flash-bad');
+    updateMiles(true);
     setState('missed');
     map.setPadding({ top: 56, bottom: $('prompt').getBoundingClientRect().height + 16, left: 0, right: 0 });
     focusOn(shape, ll);
 
-    finishGame(false, true);
+    if (game.over) finishGame(false, true);
+  }
+
+  function nextAfterMiss() {
+    clearMissReveal();
+    setState('playing');
+    showPrompt();
+    padForCard($('prompt'));
   }
 
   // Fly to the missed country; keep the tap in frame too if it was nearby
@@ -1207,14 +1257,13 @@
 
   function finishGame(perfect, deferShow) {
     const entry = {
+      v: 2,
       dayIndex: game.dayIndex,
       puzzleNum: game.puzzleNum,
-      score: game.found.length,
-      tiers: game.found.map(i => COUNTRIES[i].tier).join(''),
-      found: game.found.map(i => COUNTRIES[i].name),
-      missed: game.missed !== null ? { name: COUNTRIES[game.missed].name, tier: COUNTRIES[game.missed].tier } : null,
-      tapped: game.tapped ? game.tapped.name : null,
-      missKm: game.tapped ? game.tapped.km : null,
+      score: foundCount(),
+      grid: game.rounds.map(r => r.mi === 0 ? COUNTRIES[r.i].tier : 'X').join(''),
+      rounds: game.rounds.map(r => ({ name: COUNTRIES[r.i].name, tier: COUNTRIES[r.i].tier, mi: r.mi, tapped: r.tapped })),
+      milesUsed: milesUsed(),
       perfect: !!perfect,
     };
     game._entry = entry; // test mode doesn't save, so "See results" reads it from here
@@ -1224,26 +1273,42 @@
     if (!deferShow) showResults(entry);
   }
 
+  // History entries from before the miles budget (one miss ended the run)
+  function normEntry(e) {
+    if (e.v === 2) return e;
+    const rounds = (e.found || []).map((name, k) => ({ name, tier: e.tiers[k], mi: 0, tapped: null }));
+    if (e.missed) rounds.push({ name: e.missed.name, tier: e.missed.tier, mi: Math.max(1, Math.round((e.missKm || 0) * KM_TO_MI)), tapped: e.tapped || null });
+    return {
+      ...e, v: 2, rounds,
+      grid: rounds.map(r => r.mi === 0 ? r.tier : 'X').join(''),
+      milesUsed: rounds.reduce((t, r) => t + r.mi, 0),
+    };
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // RESULTS & SHARE
   // ═══════════════════════════════════════════════════════════════
 
   function squaresFor(entry, perLine = 10) {
-    const sq = [...entry.tiers].map(t => TIER_EMOJI[t]);
-    if (entry.missed) sq.push('❌');
+    const sq = [...normEntry(entry).grid].map(t => TIER_EMOJI[t] || '❌');
     const lines = [];
     for (let i = 0; i < sq.length; i += perLine) lines.push(sq.slice(i, i + perLine).join(''));
     return lines.join('\n');
   }
 
-  function fmtKm(km) { return `${km.toLocaleString('en-US')} km`; }
+  // "180 · 233 · 6,829 mi"
+  function missList(misses) {
+    return misses.map(r => Math.round(r.mi).toLocaleString('en-US')).join(' · ') + ' mi';
+  }
 
   function buildShareText(entry) {
     const head = TEST_MODE ? '🌍 Map Tap Streaks (practice)' : `🌍 Map Tap Streaks #${entry.puzzleNum}`;
-    const score = entry.perfect ? `🏆 Perfect run: ${entry.score}!` : `🔥 Streak: ${entry.score}`;
-    // Distance only, no country name, so the share doesn't spoil today's sequence
-    const miss = entry.missKm != null ? `\n📍 Final guess: ${fmtKm(entry.missKm)} off` : '';
-    return `${head}\n${score}\n${squaresFor(entry)}${miss}\n${SHARE_URL}`;
+    const e = normEntry(entry);
+    const score = e.perfect ? `🏆 Perfect run: ${e.score}!` : `🎯 Found: ${e.score}`;
+    // Distances only, no country names, so the share doesn't spoil today's sequence
+    const misses = e.rounds.filter(r => r.mi > 0);
+    const miss = misses.length ? `\n📍 Off by ${missList(misses)}` : '';
+    return `${head}\n${score}\n${squaresFor(e)}${miss}\n${SHARE_URL}`;
   }
 
   function share(text) {
@@ -1271,40 +1336,36 @@
   const SUBS = [
     [0,  'Rough start. The globe is big.'],
     [1,  'On the board!'],
-    [4,  'Solid warm-up.'],
-    [8,  'Nice streak!'],
-    [13, 'Geography whiz.'],
-    [20, 'Cartographer-level.'],
-    [30, 'Are you a satellite?'],
-    [50, 'Legendary.'],
+    [5,  'Solid warm-up.'],
+    [10, 'Nice run!'],
+    [15, 'Geography whiz.'],
+    [25, 'Cartographer-level.'],
+    [40, 'Are you a satellite?'],
+    [60, 'Legendary.'],
   ];
 
-  function showResults(entry) {
-    $('res-label').textContent = TEST_MODE ? 'Practice streak' : `Puzzle #${entry.puzzleNum} streak`;
+  function showResults(raw) {
+    const entry = normEntry(raw);
+    $('res-label').textContent = TEST_MODE ? 'Practice · countries found' : `Puzzle #${entry.puzzleNum} · countries found`;
     $('res-score').textContent = entry.score;
     let sub = SUBS[0][1];
     SUBS.forEach(([n, s]) => { if (entry.score >= n) sub = s; });
-    $('res-sub').textContent = entry.perfect ? 'You found every single country. Wow.'
-      : entry.missKm != null ? `${sub} Final guess: ${fmtKm(entry.missKm)} off.` : sub;
+    const misses = entry.rounds.filter(r => r.mi > 0);
+    $('res-sub').textContent = entry.perfect && !misses.length ? 'You found every single country. Wow.'
+      : misses.length ? `${sub} Misses: ${missList(misses)}.` : sub;
     $('res-grid').textContent = squaresFor(entry);
 
     const list = $('found-list');
     list.innerHTML = '';
-    entry.found.forEach((name, i) => {
+    entry.rounds.forEach(r => {
       const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.innerHTML = `<i class="dot ${entry.tiers[i]}"></i>${escapeHtml(name)}`;
-      list.appendChild(chip);
-    });
-    if (entry.missed) {
-      const chip = document.createElement('span');
-      chip.className = 'chip missed';
-      chip.innerHTML = `❌ <i class="dot ${entry.missed.tier}"></i>${escapeHtml(entry.missed.name)}`
-        + (entry.tapped || entry.missKm != null
-          ? ` <span style="color:var(--text-dim)">(${[entry.tapped && 'tapped ' + escapeHtml(entry.tapped), entry.missKm != null && fmtKm(entry.missKm) + ' off'].filter(Boolean).join(', ')})</span>`
+      chip.className = 'chip' + (r.mi > 0 ? ' missed' : '');
+      chip.innerHTML = (r.mi > 0 ? '❌ ' : '') + `<i class="dot ${r.tier}"></i>${escapeHtml(r.name)}`
+        + (r.mi > 0
+          ? ` <span class="off">(${[r.tapped && 'tapped ' + escapeHtml(r.tapped), fmtMi(r.mi) + ' off'].filter(Boolean).join(', ')})</span>`
           : '');
       list.appendChild(chip);
-    }
+    });
 
     const hist = loadHistory();
     const scores = hist.map(e => e.score);
@@ -1317,7 +1378,7 @@
     $('btn-copy').onclick = () => copyText(buildShareText(entry));
     $('btn-play-again').style.display = TEST_MODE ? '' : 'none';
     $('next-in').style.display = TEST_MODE ? 'none' : '';
-    $('btn-view-map').style.display = game && game.missed !== null ? '' : 'none';
+    $('btn-view-map').style.display = game && game.lastMiss ? '' : 'none';
 
     loadCommunityStats(entry.dayIndex, entry.score);
     setState('result');
@@ -1343,7 +1404,7 @@
       const item = document.createElement('div');
       item.className = 'hist-item';
       item.innerHTML = `<div class="hi-num">#${e.puzzleNum}</div>
-        <div class="hi-grid">${[...e.tiers].map(t => TIER_EMOJI[t]).join('')}${e.missed ? '❌' : ''}</div>
+        <div class="hi-grid">${[...normEntry(e).grid].map(t => TIER_EMOJI[t] || '❌').join('')}</div>
         <div class="hi-score">${e.score}</div>`;
       el.appendChild(item);
     });
@@ -1414,9 +1475,9 @@
   // ═══════════════════════════════════════════════════════════════
 
   function showStart() {
-    const resumed = game.found.length > 0;
+    const resumed = game.rounds.length > 0;
     $('start-sub').textContent = TEST_MODE ? 'Practice mode' : `Daily puzzle #${game.puzzleNum}`;
-    $('btn-start').textContent = resumed ? `Resume (streak ${game.found.length})` : 'Start';
+    $('btn-start').textContent = resumed ? `Resume (${foundCount()} found · ${fmtMi(milesLeft())} left)` : 'Start';
     setState('start');
     const card = document.querySelector('.start-card');
     padForCard(card, false);
@@ -1441,9 +1502,8 @@
     });
 
     $('btn-start').onclick = () => { lsSet(VISITED_KEY, true); startPlaying(); };
-    $('btn-see-results').onclick = () => {
-      showResults(game._entry);
-    };
+    $('btn-see-results').onclick = () => showResults(game._entry);
+    $('btn-next').onclick = nextAfterMiss;
     $('btn-view-map').onclick = () => setState('map');
     $('btn-back-results').onclick = () => setState('result');
     $('btn-play-again').onclick = () => { newGame(); startPlaying(); };
